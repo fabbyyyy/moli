@@ -3,12 +3,18 @@ import SwiftUI
 struct ShelfScanCameraView: View {
     @Environment(\.dismiss) private var dismiss
     let store: Store
+    let nextStoreAction: () -> Void
 
     @State private var navigateToAnalysis = false
     @State private var capturedImagePath: String?
     @State private var cameraUnavailable = false
     @State private var captureTrigger = 0
     
+    init(store: Store, nextStoreAction: @escaping () -> Void = {}) {
+        self.store = store
+        self.nextStoreAction = nextStoreAction
+    }
+
     var body: some View {
         ZStack {
             Color(hex: "2A241D").ignoresSafeArea()
@@ -105,9 +111,10 @@ struct ShelfScanCameraView: View {
             .allowsHitTesting(false)
         }
         .navigationDestination(isPresented: $navigateToAnalysis) {
-            AIAnalysisView(store: store, imagePath: capturedImagePath)
+            AIAnalysisView(store: store, imagePath: capturedImagePath, nextStoreAction: nextStoreAction)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
     }
     
     private func dismissView() {

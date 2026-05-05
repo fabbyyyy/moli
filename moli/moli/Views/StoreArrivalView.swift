@@ -7,11 +7,17 @@ private let storeArrivalSynth = AVSpeechSynthesizer()
 struct StoreArrivalView: View {
     @Environment(\.dismiss) private var dismiss
     let store: Store
+    let nextStoreAction: () -> Void
 
     @State private var selectedImage: UIImage?
     @State private var showCamera = false
     @State private var manosLibres = false
     @State private var navigateToAnalysis = false
+
+    init(store: Store, nextStoreAction: @escaping () -> Void = {}) {
+        self.store = store
+        self.nextStoreAction = nextStoreAction
+    }
 
     var storeInfoText: String {
         "Llegaste a \(store.name). Última orden: \(store.lastOrderPieces) piezas hace \(store.lastVisitDaysAgo) días."
@@ -196,8 +202,9 @@ struct StoreArrivalView: View {
             }
         }
         .navigationDestination(isPresented: $navigateToAnalysis) {
-            AIAnalysisView(store: store, image: selectedImage)
+            AIAnalysisView(store: store, image: selectedImage, nextStoreAction: nextStoreAction)
         }
+        .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showCamera) {
             // Nombre actualizado para evitar conflictos
             StoreArrivalImagePicker(image: $selectedImage)
@@ -243,6 +250,4 @@ struct StoreArrivalImagePicker: UIViewControllerRepresentable {
         StoreArrivalView(store: MockStores.elPino)
     }
 }
-
-
 

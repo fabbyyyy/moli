@@ -4,9 +4,11 @@ struct AIAnalysisView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: AIAnalysisViewModel
     @State private var navigateToConfirmation = false
+    let nextStoreAction: () -> Void
 
-    init(store: Store, imagePath: String? = nil, image: UIImage? = nil) {
+    init(store: Store, imagePath: String? = nil, image: UIImage? = nil, nextStoreAction: @escaping () -> Void = {}) {
         _viewModel = State(initialValue: AIAnalysisViewModel(store: store, imagePath: imagePath, image: image))
+        self.nextStoreAction = nextStoreAction
     }
 
     var body: some View {
@@ -46,9 +48,15 @@ struct AIAnalysisView: View {
             }
         }
         .overlay { if viewModel.isLoading { AnalysisLoadingView() } }
+        .toolbar(.hidden, for: .tabBar)
         .navigationDestination(isPresented: $navigateToConfirmation) {
             if let order = viewModel.order {
-                ConfirmationView(store: viewModel.store, pieces: order.totalPieces, wasteAvoided: order.avoidedWasteMXN)
+                ConfirmationView(
+                    store: viewModel.store,
+                    pieces: order.totalPieces,
+                    wasteAvoided: order.avoidedWasteMXN,
+                    nextStoreAction: nextStoreAction
+                )
             }
         }
         .task { await viewModel.analyze() }
@@ -161,12 +169,18 @@ private struct RecommendationSection: View {
 
 private struct AnalysisBottomBar: View {
     let totalPieces: Int; let confirmAction: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var fadeColor: Color {
+        colorScheme == .dark ? AppTheme.Colors.backgroundGray : .white
+    }
+
     var body: some View {
         VStack {
             Spacer()
             ZStack {
                 Rectangle()
-                    .fill(Color.white)
+                    .fill(fadeColor)
                     .frame(height: 100)
                     .blur(radius: 10)
                     .offset(y: 20)
@@ -178,7 +192,7 @@ private struct AnalysisBottomBar: View {
                         .frame(height: 55)
                         .background(AppTheme.Colors.primaryBlue)
                         .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .clipShape(Capsule())
                         .shadow(radius: 5)
                 }
                 .padding(.horizontal)
@@ -203,4 +217,3 @@ private struct AnalysisLoadingView: View {
         }
     }
 }
-
