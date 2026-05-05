@@ -20,6 +20,9 @@ struct HomeView: View {
                             nextStoreName: viewModel.nextStoreName
                         )
                         ExpirationAlertsSection(alerts: viewModel.expiringProductAlerts)
+                        if let pendingOrder = viewModel.pendingWeeklyOrderCart {
+                            PendingOrderConfirmationNotice(order: pendingOrder)
+                        }
                         HomeOrdersSection(orders: viewModel.readyOrderSummaries)
 
                         Spacer(minLength: 40)
@@ -216,6 +219,36 @@ private struct HomeOrdersSection: View {
                 }
             }
         }
+        .padding(.horizontal)
+    }
+}
+
+private struct PendingOrderConfirmationNotice: View {
+    let order: WeeklyOrder
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.title3)
+                .foregroundColor(AppTheme.Colors.bimboRed)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Confirma tu pedido para el siguiente martes")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+
+                Text("\(order.storeCount) tiendas · \(order.totalPieces) piezas listas para cerrar")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.Colors.mutedGray)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding()
+        .background(AppTheme.Colors.alertYellow)
+        .cornerRadius(AppTheme.Radii.medium)
         .padding(.horizontal)
     }
 }

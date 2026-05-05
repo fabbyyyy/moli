@@ -24,6 +24,7 @@ final class HomeViewModel {
     var completedStores: Int = 3
     var totalStores: Int = 8
     var nextStoreName: String = "Abarrotes El Pino"
+    var pendingWeeklyOrderCart: WeeklyOrder?
     var expiringProductAlerts: [ProductExpirationAlert] = [
         ProductExpirationAlert(productName: "Donas Glaseadas", storeName: "Abarrotes El Pino", quantity: 2, daysUntilExpiration: 2),
         ProductExpirationAlert(productName: "Pan Blanco Grande", storeName: "Tiendita El Sol", quantity: 4, daysUntilExpiration: 3),
@@ -42,6 +43,7 @@ final class HomeViewModel {
         }
         
         let cart = LocalPersistenceService.shared.weeklyOrderCart
+        pendingWeeklyOrderCart = cart.entries.isEmpty ? nil : cart
         var summaries: [ReadyOrderSummary] = []
         
         if !cart.entries.isEmpty {

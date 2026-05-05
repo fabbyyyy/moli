@@ -66,10 +66,20 @@ class LocalPersistenceService: ObservableObject {
             id: UUID(),
             routeName: routeName,
             createdAt: Date(),
-            targetWeekStartDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date(),
+            targetWeekStartDate: Self.nextTuesday(from: Date()),
             finalizedAt: nil,
             entries: [],
             status: .cart
         )
+    }
+
+    private static func nextTuesday(from date: Date) -> Date {
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: date)
+        let currentWeekday = calendar.component(.weekday, from: startOfToday)
+        let tuesday = 3
+        let rawDaysUntilTuesday = (tuesday - currentWeekday + 7) % 7
+        let daysUntilTuesday = rawDaysUntilTuesday == 0 ? 7 : rawDaysUntilTuesday
+        return calendar.date(byAdding: .day, value: daysUntilTuesday, to: startOfToday) ?? date
     }
 }

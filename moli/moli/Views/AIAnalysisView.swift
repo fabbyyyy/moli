@@ -5,67 +5,53 @@ struct AIAnalysisView: View {
     @State private var viewModel: AIAnalysisViewModel
     @State private var navigateToConfirmation = false
 
-    init(store: Store, imagePath: String? = nil) {
-        _viewModel = State(initialValue: AIAnalysisViewModel(store: store, imagePath: imagePath))
+    init(store: Store, imagePath: String? = nil, image: UIImage? = nil) {
+        _viewModel = State(initialValue: AIAnalysisViewModel(store: store, imagePath: imagePath, image: image))
     }
 
     var body: some View {
         ZStack {
             AppTheme.Colors.backgroundGray.ignoresSafeArea()
 
-            AnalysisContent(
-                storeName: viewModel.store.name,
-                shelfInsights: viewModel.shelfInsights,
-                historyInsights: viewModel.historyInsights,
-                contextInsights: viewModel.contextInsights,
-                recommendations: $viewModel.recommendations,
-                totalRecommendedPieces: viewModel.totalRecommendedPieces
-            )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    AnalysisReadyHeader(storeName: viewModel.store.name)
+
+                    // --- SECCIÓN A: ANAQUEL (Huecos + Caducidad) ---
+                    if !viewModel.shelfInsights.isEmpty {
+                        InsightSection(label: "A · ANAQUEL", title: "Análisis de Imagen", insights: viewModel.shelfInsights)
+                    }
+
+                    // --- SECCIÓN B: HISTORIAL ---
+                    if !viewModel.historyInsights.isEmpty {
+                        InsightSection(label: "B · HISTORIAL", title: "Tendencias de venta", insights: viewModel.historyInsights)
+                    }
+
+                    // --- SECCIÓN C: CONTEXTO ---
+                    if !viewModel.contextInsights.isEmpty {
+                        InsightSection(label: "C · CONTEXTO", title: "Eventos actuales", insights: viewModel.contextInsights)
+                    }
+
+                    // --- SECCIÓN D: PEDIDO ---
+                    RecommendationSection(recommendations: $viewModel.recommendations, totalPieces: viewModel.totalRecommendedPieces)
+                    
+                    Spacer(minLength: 120)
+                }
+                .padding(.horizontal)
+            }
             .disabled(viewModel.isLoading)
 
             if !viewModel.isLoading {
-                AnalysisBottomBar(
-                    totalPieces: viewModel.totalRecommendedPieces,
-                    confirmAction: confirmOrder
-                )
+                AnalysisBottomBar(totalPieces: viewModel.totalRecommendedPieces, confirmAction: confirmOrder)
             }
         }
-        .overlay {
-            if viewModel.isLoading {
-                AnalysisLoadingView()
-            }
-        }
-        .navigationTitle("Análisis del anaquel")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(action: dismissView) {
-                    Image(systemName: "chevron.left")
-                }
-                .tint(AppTheme.Colors.textPrimary)
-            }
-        }
+        .overlay { if viewModel.isLoading { AnalysisLoadingView() } }
         .navigationDestination(isPresented: $navigateToConfirmation) {
             if let order = viewModel.order {
-                ConfirmationView(
-                    store: viewModel.store,
-                    pieces: order.totalPieces,
-                    wasteAvoided: order.avoidedWasteMXN
-                )
+                ConfirmationView(store: viewModel.store, pieces: order.totalPieces, wasteAvoided: order.avoidedWasteMXN)
             }
         }
-        .task {
-            await analyzeShelf()
-        }
-    }
-
-    private func dismissView() {
-        dismiss()
-    }
-
-    private func analyzeShelf() async {
-        await viewModel.analyze()
+        .task { await viewModel.analyze() }
     }
 
     private func confirmOrder() {
@@ -74,72 +60,7 @@ struct AIAnalysisView: View {
     }
 }
 
-private struct AnalysisContent: View {
-    let storeName: String
-    let shelfInsights: [AIInsight]
-    let historyInsights: [AIInsight]
-    let contextInsights: [AIInsight]
-    @Binding var recommendations: [Recommendation]
-    let totalRecommendedPieces: Int
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                AnalysisReadyHeader(storeName: storeName)
-
-                InsightSection(
-                    label: "A · LO QUE VI EN EL ANAQUEL",
-                    title: "\(shelfInsights.count) cosas que vi en tu foto",
-                    insights: shelfInsights
-                )
-
-                InsightSection(
-                    label: "B · LO QUE ME DICE EL HISTORIAL",
-                    title: "Cómo se mueve esta tienda",
-                    insights: historyInsights
-                )
-
-                InsightSection(
-                    label: "C · EVENTOS Y CONTEXTO",
-                    title: "Qué está pasando esta semana",
-                    insights: contextInsights
-                )
-
-                RecommendationSection(
-                    recommendations: $recommendations,
-                    totalPieces: totalRecommendedPieces
-                )
-
-                Spacer(minLength: 120)
-            }
-            .padding(.horizontal)
-            .padding(.top, 10)
-        }
-    }
-}
-
-private struct AnalysisReadyHeader: View {
-    let storeName: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark")
-                Text("ANÁLISIS LISTO EN 6 SEG")
-            }
-            .font(.caption)
-            .fontWeight(.bold)
-            .textCase(.uppercase)
-            .foregroundColor(AppTheme.Colors.textPrimary)
-
-            Text(storeName)
-                .font(.largeTitle)
-                .fontWeight(.heavy)
-                .foregroundColor(AppTheme.Colors.primaryBlue)
-        }
-    }
-}
-
+// MARK: - COMPONENTE DE TARJETAS (INSIGHTS)
 private struct InsightSection: View {
     let label: String
     let title: String
@@ -148,130 +69,138 @@ private struct InsightSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionTitle(label: label, title: title)
-
-            ForEach(insights) { insight in
-                InsightCard(insight: insight)
+            
+            ForEach(insights, id: \.id) { insight in
+                HStack(spacing: 0) {
+                    // Semáforo lateral
+                    Rectangle()
+                        .fill(colorFor(insight.severity))
+                        .frame(width: 6)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(insight.title)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        Text(insight.description)
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.Colors.mutedGray)
+                            .lineLimit(2)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    
+                    Spacer()
+                    
+                    // Icono descriptivo según el tipo de insight
+                    Image(systemName: iconFor(insight.type))
+                        .font(.system(size: 18))
+                        .foregroundColor(colorFor(insight.severity).opacity(0.8))
+                        .padding(.trailing, 16)
+                }
+                .background(AppTheme.Colors.cardWhite)
+                .cornerRadius(AppTheme.Radii.medium)
+                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
             }
         }
+    }
+
+    private func colorFor(_ severity: InsightSeverity) -> Color {
+        switch severity {
+        case .high: return .red
+        case .medium: return .orange
+        case .low: return .green
+        }
+    }
+
+    private func iconFor(_ type: InsightType) -> String {
+        switch type {
+        case .gap: return "square.grid.3x1.below.line.grid.1x2"
+        case .expiringSoon: return "calendar.badge.exclamationmark"
+        case .expired: return "exclamationmark.octagon"
+        case .trend: return "chart.line.uptrend.xyaxis"
+        case .rotation: return "arrow.2.squarepath"
+        case .warning: return "exclamationmark.triangle"
+        }
+    }
+}
+
+// MARK: - COMPONENTES DE APOYO
+private struct SectionTitle: View {
+    let label: String; let title: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).bold().foregroundColor(AppTheme.Colors.primaryBlue)
+            Text(title).font(.title3).bold().foregroundColor(AppTheme.Colors.textPrimary)
+        }
+    }
+}
+
+private struct AnalysisReadyHeader: View {
+    let storeName: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("ANÁLISIS COMPLETADO").font(.caption).bold().foregroundColor(AppTheme.Colors.textPrimary)
+            Text(storeName).font(.largeTitle).bold().foregroundColor(AppTheme.Colors.primaryBlue)
+        }.padding(.top)
     }
 }
 
 private struct RecommendationSection: View {
     @Binding var recommendations: [Recommendation]
     let totalPieces: Int
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionTitle(
-                label: "D · TE RECOMIENDO PEDIR ESTO",
-                title: "Pedido sugerido · \(totalPieces) piezas"
-            )
-
-            ForEach($recommendations) { $recommendation in
-                ProductRecommendationCard(recommendation: $recommendation)
+            SectionTitle(label: "D · PEDIDO", title: "Sugerencia: \(totalPieces) pzas")
+            ForEach($recommendations) { $rec in
+                ProductRecommendationCard(recommendation: $rec)
             }
         }
-    }
-}
-
-private struct SectionTitle: View {
-    let label: String
-    let title: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .fontWeight(.bold)
-                .foregroundColor(AppTheme.Colors.primaryBlue)
-
-            Text(title)
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundColor(AppTheme.Colors.textPrimary)
-        }
-        .padding(.top, 10)
     }
 }
 
 private struct AnalysisBottomBar: View {
-    let totalPieces: Int
-    let confirmAction: () -> Void
-
+    let totalPieces: Int; let confirmAction: () -> Void
     var body: some View {
         VStack {
             Spacer()
-
-            VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    MicrophoneButton()
-
-                    Button(action: confirmAction) {
-                        HStack {
-                            Image(systemName: "checkmark")
-                            Text("AGREGAR · \(totalPieces) pzas")
-                                .fontWeight(.bold)
-                        }
+            ZStack {
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(height: 100)
+                    .blur(radius: 10)
+                    .offset(y: 20)
+                
+                Button(action: confirmAction) {
+                    Text("CONFIRMAR · \(totalPieces) pzas")
+                        .bold()
                         .frame(maxWidth: .infinity)
-                        .frame(height: 54)
+                        .frame(height: 55)
                         .background(AppTheme.Colors.primaryBlue)
                         .foregroundColor(.white)
-                        .cornerRadius(AppTheme.Radii.medium)
-                    }
+                        .cornerRadius(12)
+                        .shadow(radius: 5)
                 }
-
-                HStack {
-                    Text("Toca el micrófono para confirmar por voz")
-                        .font(.caption)
-                        .foregroundColor(AppTheme.Colors.mutedGray)
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Image(systemName: "lock.fill")
-                            .foregroundColor(.yellow)
-                        Text("Pantalla bloqueada")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppTheme.Colors.primaryBlue)
-                    }
-                }
+                .padding(.horizontal)
+                .padding(.bottom, 20)
             }
-            .padding()
-            .background(AppTheme.Colors.backgroundGray)
         }
+        .ignoresSafeArea(.all, edges: .bottom)
     }
-}
-
-private struct MicrophoneButton: View {
-    var body: some View {
-        Button(action: startVoiceConfirmation) {
-            Image(systemName: "mic")
-                .font(.title2)
-                .foregroundColor(AppTheme.Colors.primaryBlue)
-                .frame(width: 54, height: 54)
-                .background(AppTheme.Colors.cardWhite)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(AppTheme.Colors.primaryBlue, lineWidth: 2))
-        }
-    }
-    
-    private func startVoiceConfirmation() {}
 }
 
 private struct AnalysisLoadingView: View {
     var body: some View {
-        VStack(spacing: 20) {
-            ProgressView()
-                .scaleEffect(1.5)
-                .tint(AppTheme.Colors.primaryBlue)
-            Text("Moli está analizando el anaquel...")
-                .font(.headline)
-                .foregroundColor(AppTheme.Colors.primaryBlue)
+        ZStack {
+            AppTheme.Colors.backgroundGray.ignoresSafeArea()
+            VStack(spacing: 15) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                Text("Analizando anaquel...")
+                    .font(.headline)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppTheme.Colors.backgroundGray)
     }
 }
 
-#Preview {
-    AIAnalysisView(store: MockStores.elPino)
-}
