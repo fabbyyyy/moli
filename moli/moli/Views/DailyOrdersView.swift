@@ -18,22 +18,27 @@ struct DailyOrdersView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         DailyOrdersHeader()
 
-                        LargeBlueMetricCard(
-                            title: "TOTAL DEL PEDIDO",
-                            value: "\(viewModel.currentOrder?.totalPieces ?? 0) pzas",
-                            subtitle: "\(viewModel.currentOrder?.storeCount ?? 0) tiendas para la siguiente semana"
-                        )
-                        .padding(.horizontal)
+                        if let currentOrder = viewModel.currentOrder {
+                            NavigationLink {
+                                WeeklyOrderDetailView(order: currentOrder)
+                            } label: {
+                                LargeBlueMetricCard(
+                                    title: "TOTAL DEL PEDIDO",
+                                    value: "\(currentOrder.totalPieces) pzas",
+                                    subtitle: "\(currentOrder.storeCount) tiendas para la siguiente semana"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal)
 
-                        DailyOrdersMetricRow(
-                            storeCount: viewModel.currentOrder?.storeCount ?? 0,
-                            totalMXN: viewModel.currentOrder?.estimatedTotalMXN ?? 0
-                        )
-
-                        CurrentWeeklyOrderSection(
-                            order: viewModel.currentOrder,
-                            isPendingConfirmation: viewModel.currentOrderIsPendingConfirmation
-                        )
+                            DailyOrdersMetricRow(
+                                totalMXN: currentOrder.estimatedTotalMXN,
+                                visitedCount: viewModel.completedStores,
+                                totalRouteStores: viewModel.totalRouteStores
+                            )
+                        } else {
+                            EmptyCurrentOrderNotice()
+                        }
 
                         OrderHistorySection(
                             orders: visibleHistoryOrders,
@@ -74,9 +79,9 @@ private struct DailyOrdersHeader: View {
                 .textCase(.uppercase)
                 .foregroundColor(AppTheme.Colors.primaryBlue)
 
-            Text("Pedido semanal")
-                .font(.largeTitle)
-                .fontWeight(.heavy)
+            Text("Pedido actual")
+                .font(.title3)
+                .fontWeight(.bold)
                 .foregroundColor(AppTheme.Colors.textPrimary)
         }
         .padding(.horizontal)
@@ -85,40 +90,41 @@ private struct DailyOrdersHeader: View {
 }
 
 private struct DailyOrdersMetricRow: View {
-    let storeCount: Int
     let totalMXN: Double
+    let visitedCount: Int
+    let totalRouteStores: Int
 
     var body: some View {
         HStack(spacing: 16) {
-            MetricCard(title: "TIENDAS", value: "\(storeCount)", icon: "storefront.fill")
+            MetricCard(title: "TIENDAS", value: "\(visitedCount) / \(totalRouteStores)", icon: "storefront.fill")
             MetricCard(title: "TOTAL", value: totalMXN.currencyText, icon: "banknote.fill")
         }
         .padding(.horizontal)
     }
 }
 
-private struct CurrentWeeklyOrderSection: View {
-    let order: WeeklyOrder?
-    let isPendingConfirmation: Bool
-
+private struct EmptyCurrentOrderNotice: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            OrdersSectionHeader(
-                title: "Pedido actual",
-                subtitle: isPendingConfirmation ? "Cargado desde la ruta activa" : "Confirmado para la siguiente semana"
-            )
-
-            if let order {
-                NavigationLink {
-                    WeeklyOrderDetailView(order: order)
-                } label: {
-                    WeeklyOrderSummaryCard(order: order, isCurrent: true)
-                }
-                .buttonStyle(.plain)
-            } else {
-                EmptyCurrentOrderCard()
-            }
+        VStack(spacing: 16) {
+            Image(systemName: "box.truck.badge.clock.fill")
+                .font(.system(size: 40))
+                .foregroundColor(AppTheme.Colors.primaryBlue)
+            
+            Text("¡Aún no comienzas tu ruta esta semana!")
+                .font(.headline)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .multilineTextAlignment(.center)
+                
+            Text("Inicia tu recorrido en la pestaña de Inicio para generar el pedido actual.")
+                .font(.caption)
+                .foregroundColor(AppTheme.Colors.mutedGray)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
+        .padding(32)
+        .background(AppTheme.Colors.cardWhite)
+        .cornerRadius(AppTheme.Radii.large)
+        .shadow(color: AppTheme.Shadows.card.color, radius: AppTheme.Shadows.card.radius, x: 0, y: 2)
         .padding(.horizontal)
     }
 }
@@ -180,7 +186,7 @@ private struct WeeklyOrderSummaryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
+            HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(isCurrent ? order.currentTitle : order.historyTitle)
                         .font(.headline)
@@ -193,14 +199,14 @@ private struct WeeklyOrderSummaryCard: View {
 
                 Spacer()
 
-                VStack(alignment: .trailing, spacing: 4) {
+                HStack(alignment: .center, spacing: 8) {
                     Text(order.estimatedTotalMXN.currencyText)
                         .font(.subheadline)
                         .fontWeight(.bold)
                         .foregroundColor(AppTheme.Colors.textPrimary)
 
                     Image(systemName: "chevron.right")
-                        .font(.caption)
+                        .font(.body.weight(.bold))
                         .foregroundColor(AppTheme.Colors.mutedGray)
                 }
             }
@@ -226,23 +232,7 @@ private struct WeeklyOrderSummaryCard: View {
     }
 }
 
-private struct EmptyCurrentOrderCard: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "cart")
-                .foregroundColor(AppTheme.Colors.primaryBlue)
 
-            Text("Aún no hay productos cargados desde la ruta.")
-                .font(.caption)
-                .foregroundColor(AppTheme.Colors.mutedGray)
-
-            Spacer()
-        }
-        .padding()
-        .background(AppTheme.Colors.cardWhite)
-        .cornerRadius(AppTheme.Radii.medium)
-    }
-}
 
 private struct WeeklyOrderDetailView: View {
     let order: WeeklyOrder
