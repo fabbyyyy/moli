@@ -209,7 +209,7 @@ private struct AnalysisBottomBar: View {
                     Button(action: confirmAction) {
                         HStack {
                             Image(systemName: "checkmark")
-                            Text("CONFIRMAR · \(totalPieces) pzas")
+                            Text("AGREGAR · \(totalPieces) pzas")
                                 .fontWeight(.bold)
                         }
                         .frame(maxWidth: .infinity)

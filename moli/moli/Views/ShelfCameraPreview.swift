@@ -9,12 +9,17 @@ struct ShelfCameraPreview: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> ShelfCameraPreviewController {
         let controller = ShelfCameraPreviewController()
-        controller.onPhotoCaptured = onPhotoCaptured
-        controller.onCameraUnavailable = onCameraUnavailable
+        context.coordinator.onPhotoCaptured = onPhotoCaptured
+        context.coordinator.onCameraUnavailable = onCameraUnavailable
+        controller.onPhotoCaptured = context.coordinator.notifyPhotoCaptured
+        controller.onCameraUnavailable = context.coordinator.notifyCameraUnavailable
         return controller
     }
 
     func updateUIViewController(_ uiViewController: ShelfCameraPreviewController, context: Context) {
+        context.coordinator.onPhotoCaptured = onPhotoCaptured
+        context.coordinator.onCameraUnavailable = onCameraUnavailable
+        
         guard captureTrigger != context.coordinator.lastCaptureTrigger else {
             return
         }
@@ -29,6 +34,20 @@ struct ShelfCameraPreview: UIViewControllerRepresentable {
 
     final class Coordinator {
         var lastCaptureTrigger = 0
+        var onPhotoCaptured: ((String?) -> Void)?
+        var onCameraUnavailable: (() -> Void)?
+        
+        func notifyPhotoCaptured(_ imagePath: String?) {
+            Task { @MainActor in
+                self.onPhotoCaptured?(imagePath)
+            }
+        }
+        
+        func notifyCameraUnavailable() {
+            Task { @MainActor in
+                self.onCameraUnavailable?()
+            }
+        }
     }
 }
 

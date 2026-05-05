@@ -57,6 +57,6 @@ final class AIAnalysisViewModel {
         currentOrder.status = .readyToSend
         order = currentOrder
         
-        LocalPersistenceService.shared.saveOrder(currentOrder)
+        LocalPersistenceService.shared.addOrderSuggestionToCart(currentOrder)
     }
 }

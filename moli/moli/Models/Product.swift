@@ -8,4 +8,5 @@ struct Product: Identifiable, Hashable {
     let shelfLifeDays: Int
     let brand: String
     let imageName: String?
+    let unitPriceMXN: Double
 }

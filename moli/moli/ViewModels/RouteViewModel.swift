@@ -80,8 +80,48 @@ final class RouteViewModel {
         return "\(max(Int(navigationRoute.expectedTravelTime / 60), 1)) min"
     }
 
+    var navigationRemainingDistanceText: String {
+        guard let navigationRoute else {
+            return "--"
+        }
+
+        if navigationRoute.distance < 1_000 {
+            return "\(Int(navigationRoute.distance.rounded()))"
+        }
+
+        return String(format: "%.1f", navigationRoute.distance / 1_000)
+    }
+
+    var navigationRemainingDistanceUnit: String {
+        guard let navigationRoute else {
+            return "m"
+        }
+
+        return navigationRoute.distance < 1_000 ? "m" : "km"
+    }
+
+    var navigationArrivalTimeText: String {
+        let arrivalDate = Date().addingTimeInterval(navigationRoute?.expectedTravelTime ?? 0)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_MX")
+        formatter.dateFormat = "H:mm"
+        return formatter.string(from: arrivalDate)
+    }
+
     var navigationInstructionText: String {
         navigationRoute?.steps.first(where: { !$0.instructions.isEmpty })?.instructions ?? "Sigue la ruta marcada"
+    }
+
+    var currentNavigationStep: RouteNavigationStepInfo {
+        navigationStepInfo(at: 0) ?? RouteNavigationStepInfo(
+            instruction: "Sigue la ruta marcada",
+            distanceText: navigationRemainingDistanceText,
+            systemImage: "arrow.up"
+        )
+    }
+
+    var nextNavigationStep: RouteNavigationStepInfo? {
+        navigationStepInfo(at: 1)
     }
     
     var mapRegion: MKCoordinateRegion {
@@ -237,8 +277,61 @@ final class RouteViewModel {
             }
         }
     }
+
+    private func navigationStepInfo(at visibleIndex: Int) -> RouteNavigationStepInfo? {
+        guard let step = navigationRoute?.steps
+            .filter({ !$0.instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            .dropFirst(visibleIndex)
+            .first else {
+            return nil
+        }
+
+        return RouteNavigationStepInfo(
+            instruction: step.instructions,
+            distanceText: step.formattedDistance,
+            systemImage: step.directionSystemImage
+        )
+    }
 }
 
 private enum RouteCalculationError: Error {
     case noRoute
+}
+
+struct RouteNavigationStepInfo: Hashable {
+    let instruction: String
+    let distanceText: String
+    let systemImage: String
+}
+
+private extension MKRoute.Step {
+    var formattedDistance: String {
+        if distance < 1_000 {
+            return "\(Int(distance.rounded())) m"
+        }
+
+        return String(format: "%.1f km", distance / 1_000)
+    }
+
+    var directionSystemImage: String {
+        let lowercasedInstruction = instructions.lowercased()
+
+        if lowercasedInstruction.contains("left") || lowercasedInstruction.contains("izquierda") {
+            return "arrow.turn.up.left"
+        }
+
+        if lowercasedInstruction.contains("right") || lowercasedInstruction.contains("derecha") {
+            return "arrow.turn.up.right"
+        }
+
+        if lowercasedInstruction.contains("arrive") || lowercasedInstruction.contains("llega") {
+            return "mappin.and.ellipse"
+        }
+
+        if lowercasedInstruction.contains("u-turn") || lowercasedInstruction.contains("retorno") {
+            return "arrow.uturn.left"
+        }
+
+        return "arrow.up"
+    }
 }

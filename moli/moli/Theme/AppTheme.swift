@@ -1,18 +1,23 @@
 import SwiftUI
+import UIKit
 
 struct AppTheme {
     struct Colors {
-        static let primaryBlue = Color(hex: "26357F")
-        static let deepNavy = Color(hex: "10142F")
-        static let backgroundGray = Color(hex: "F3F4F8")
-        static let cardWhite = Color.white
-        static let mutedGray = Color(hex: "7A7D89")
-        static let softBlue = Color(hex: "E9EDF8")
-        static let alertYellow = Color(hex: "FFF0CC")
-        static let alertOrange = Color(hex: "F4A62A")
-        static let dangerRed = Color(hex: "EF3340")
-        static let successGray = Color(hex: "8B8D98")
-        static let textPrimary = Color(hex: "1A1D2B") // Almost black for text
+        static let bimboBlue = Color(light: "293572", dark: "A7B4FF")
+        static let bimboRed = Color(light: "D33A3A", dark: "FF7C7C")
+
+        static let primaryBlue = bimboBlue
+        static let deepNavy = Color(light: "10142F", dark: "F3F5FF")
+        static let backgroundGray = Color(light: "F3F4F8", dark: "090B16")
+        static let cardWhite = Color(light: "FFFFFF", dark: "171B2F")
+        static let mutedGray = Color(light: "7A7D89", dark: "A9AEC2")
+        static let softBlue = Color(light: "E9EDF8", dark: "232A4A")
+        static let alertYellow = Color(light: "FFF0CC", dark: "352617")
+        static let alertOrange = Color(light: "D33A3A", dark: "FF8A8A")
+        static let dangerRed = bimboRed
+        static let successGray = Color(light: "8B8D98", dark: "B6BAC8")
+        static let textPrimary = Color(light: "1A1D2B", dark: "F4F6FF")
+        static let warningText = Color(light: "8A2D2D", dark: "FFD1D1")
     }
     
     struct Radii {
@@ -37,7 +42,25 @@ struct AppTheme {
 
 // Helper for Hex colors
 extension Color {
+    init(light: String, dark: String) {
+        self.init(UIColor { traitCollection in
+            UIColor(hex: traitCollection.userInterfaceStyle == .dark ? dark : light)
+        })
+    }
+
     init(hex: String) {
+        let components = Self.rgbaComponents(from: hex)
+
+        self.init(
+            .sRGB,
+            red: components.red,
+            green: components.green,
+            blue: components.blue,
+            opacity: components.opacity
+        )
+    }
+
+    fileprivate static func rgbaComponents(from hex: String) -> (red: Double, green: Double, blue: Double, opacity: Double) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
         Scanner(string: hex).scanHexInt64(&int)
@@ -50,15 +73,26 @@ extension Color {
         case 8: // ARGB (32-bit)
             (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
         default:
-            (a, r, g, b) = (1, 1, 1, 0)
+            (a, r, g, b) = (255, 255, 255, 255)
         }
 
-        self.init(
-            .sRGB,
+        return (
             red: Double(r) / 255,
             green: Double(g) / 255,
-            blue:  Double(b) / 255,
+            blue: Double(b) / 255,
             opacity: Double(a) / 255
+        )
+    }
+}
+
+private extension UIColor {
+    convenience init(hex: String) {
+        let components = Color.rgbaComponents(from: hex)
+        self.init(
+            red: components.red,
+            green: components.green,
+            blue: components.blue,
+            alpha: components.opacity
         )
     }
 }

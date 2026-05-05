@@ -2,11 +2,42 @@ import AVFoundation
 import CoreLocation
 import MapKit
 
+enum RouteVoiceVolume: String, CaseIterable, Identifiable {
+    case louder
+    case normal
+    case softer
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .louder: return "Louder"
+        case .normal: return "Normal"
+        case .softer: return "Softer"
+        }
+    }
+
+    var speechVolume: Float {
+        switch self {
+        case .louder: return 1.0
+        case .normal: return 0.78
+        case .softer: return 0.48
+        }
+    }
+}
+
 @MainActor
 final class RouteVoiceGuidanceService {
     private let synthesizer = AVSpeechSynthesizer()
     private var spokenStepIndexes: Set<Int> = []
     private var didAnnounceStart = false
+    private var volume: RouteVoiceVolume = .normal
+
+    func setVolume(_ volume: RouteVoiceVolume) {
+        self.volume = volume
+    }
 
     func start(route: MKRoute?, destinationName: String) {
         spokenStepIndexes = []
@@ -61,6 +92,7 @@ final class RouteVoiceGuidanceService {
 
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = AVSpeechSynthesisVoice(language: "es-MX")
+        utterance.volume = volume.speechVolume
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.92
         synthesizer.speak(utterance)
     }

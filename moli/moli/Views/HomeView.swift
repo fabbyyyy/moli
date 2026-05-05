@@ -226,10 +226,10 @@ private struct ReadyOrderRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(order.storeName)
+                Text(order.title)
                     .font(.headline)
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                Text("\(order.pieces) piezas sugeridas")
+                Text("\(order.pieces) piezas · \(order.subtitle)")
                     .font(.caption)
                     .foregroundColor(AppTheme.Colors.mutedGray)
             }

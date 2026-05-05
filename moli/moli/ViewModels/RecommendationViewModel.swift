@@ -47,7 +47,7 @@ final class RecommendationViewModel {
             currentOrder.totalPieces = totalPieces
             currentOrder.status = .readyToSend
             order = currentOrder
-            LocalPersistenceService.shared.saveOrder(currentOrder)
+            LocalPersistenceService.shared.addOrderSuggestionToCart(currentOrder)
         }
     }
 }

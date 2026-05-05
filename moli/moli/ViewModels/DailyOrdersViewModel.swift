@@ -3,17 +3,23 @@ import Observation
 
 @Observable
 final class DailyOrdersViewModel {
-    var orders: [Order] = []
+    var currentCart: WeeklyOrder = LocalPersistenceService.shared.weeklyOrderCart
+    var orders: [WeeklyOrder] = []
     
     var totalWasteAvoided: Double {
-        orders.reduce(0) { $0 + $1.avoidedWasteMXN }
+        currentCart.avoidedWasteMXN + orders.reduce(0) { $0 + $1.avoidedWasteMXN }
     }
     
     var totalPieces: Int {
-        orders.reduce(0) { $0 + $1.totalPieces }
+        currentCart.totalPieces + orders.reduce(0) { $0 + $1.totalPieces }
+    }
+    
+    var totalStoreEntries: Int {
+        currentCart.storeCount + orders.reduce(0) { $0 + $1.storeCount }
     }
     
     func loadOrders() {
-        self.orders = LocalPersistenceService.shared.dailyOrders
+        self.currentCart = LocalPersistenceService.shared.weeklyOrderCart
+        self.orders = LocalPersistenceService.shared.weeklyOrders
     }
 }

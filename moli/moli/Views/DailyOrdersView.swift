@@ -13,14 +13,15 @@ struct DailyOrdersView: View {
                         DailyOrdersHeader()
 
                         LargeBlueMetricCard(
-                            title: "MERMA EVITADA HOY",
+                            title: "MERMA EVITADA ESTA SEMANA",
                             value: "$\(Int(viewModel.totalWasteAvoided)) MXN",
-                            subtitle: "La IA evitó mermas en \(viewModel.orders.count) tiendas"
+                            subtitle: "La IA recomendó surtido para \(viewModel.totalStoreEntries) tiendas"
                         )
                         .padding(.horizontal)
 
-                        DailyOrdersMetricRow(orderCount: viewModel.orders.count)
+                        DailyOrdersMetricRow(orderCount: viewModel.totalStoreEntries)
                         QuincenaAlert()
+                        WeeklyCartSection(order: viewModel.currentCart)
                         CompletedOrdersSection(orders: viewModel.orders)
 
                         Spacer(minLength: 40)
@@ -41,13 +42,13 @@ struct DailyOrdersView: View {
 private struct DailyOrdersHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Hoy · Ruta 14")
+            Text("Pedidos · Ruta 14")
                 .font(.caption)
                 .fontWeight(.bold)
                 .textCase(.uppercase)
                 .foregroundColor(AppTheme.Colors.primaryBlue)
 
-            Text("Pedidos del día")
+            Text("Histórico")
                 .font(.largeTitle)
                 .fontWeight(.heavy)
                 .foregroundColor(AppTheme.Colors.textPrimary)
@@ -96,11 +97,11 @@ private struct QuincenaAlert: View {
 }
 
 private struct CompletedOrdersSection: View {
-    let orders: [Order]
+    let orders: [WeeklyOrder]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("ÓRDENES COMPLETADAS")
+            Text("HISTÓRICO COMPLETO")
                 .font(.caption)
                 .fontWeight(.bold)
                 .foregroundColor(AppTheme.Colors.mutedGray)
@@ -108,7 +109,7 @@ private struct CompletedOrdersSection: View {
 
             VStack(spacing: 12) {
                 ForEach(orders) { order in
-                    CompletedOrderRow(order: order)
+                    WeeklyOrderRow(order: order)
                 }
             }
         }
@@ -116,30 +117,63 @@ private struct CompletedOrdersSection: View {
     }
 }
 
-private struct CompletedOrderRow: View {
-    let order: Order
+private struct WeeklyCartSection: View {
+    let order: WeeklyOrder
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(order.store.name)
-                    .font(.headline)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                HStack {
-                    Text(order.date, style: .time)
-                    Text("·")
-                    Text("\(order.totalPieces) piezas")
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("CARRITO EN RUTA")
                 .font(.caption)
-                .foregroundColor(AppTheme.Colors.mutedGray)
-            }
-
-            Spacer()
-
-            Text("$\(order.totalPieces * 15)")
-                .font(.subheadline)
                 .fontWeight(.bold)
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .foregroundColor(AppTheme.Colors.mutedGray)
+                .padding(.top, 10)
+
+            if order.entries.isEmpty {
+                Text("Aún no agregas sugerencias al carrito semanal.")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.Colors.mutedGray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(AppTheme.Colors.cardWhite)
+                    .cornerRadius(AppTheme.Radii.medium)
+            } else {
+                WeeklyOrderRow(order: order)
+            }
+        }
+        .padding(.horizontal)
+    }
+}
+
+private struct WeeklyOrderRow: View {
+    let order: WeeklyOrder
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(order.status == .cart ? "Carrito semanal" : "Pedido semana siguiente")
+                        .font(.headline)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Text("\(order.storeCount) tiendas · \(order.totalPieces) piezas")
+                        .font(.caption)
+                        .foregroundColor(AppTheme.Colors.mutedGray)
+                }
+
+                Spacer()
+
+                Text("$\(order.totalPieces * 15)")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(order.entries) { entry in
+                    Text("\(entry.store.name) · \(entry.totalPieces) pzas")
+                        .font(.caption)
+                        .foregroundColor(AppTheme.Colors.mutedGray)
+                }
+            }
         }
         .padding()
         .background(AppTheme.Colors.cardWhite)

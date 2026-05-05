@@ -66,7 +66,7 @@ private struct ConfirmationTitle: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Text("Pedido enviado")
+            Text("Agregado al carrito")
                 .font(.title)
                 .fontWeight(.heavy)
                 .foregroundColor(AppTheme.Colors.textPrimary)
@@ -85,9 +85,9 @@ private struct ConfirmationDetails: View {
     var body: some View {
         HStack(spacing: 16) {
             ConfirmationDetailCard(
-                title: "PRÓXIMA VISITA",
-                value: "en 7 días",
-                subtitle: "martes",
+                title: "PEDIDO",
+                value: "semana próxima",
+                subtitle: "se cierra al terminar ruta",
                 subtitleColor: AppTheme.Colors.mutedGray,
                 isSubtitleBold: false
             )
@@ -142,14 +142,14 @@ private struct ConfirmationAlert: View {
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Quincena el viernes")
+                Text("Carrito semanal")
                     .font(.subheadline)
                     .fontWeight(.bold)
-                    .foregroundColor(Color(hex: "8A5A19"))
+                    .foregroundColor(AppTheme.Colors.warningText)
 
-                Text("Considera adelantar tu próxima visita 1-2 días - esta tienda gana más en quincena.")
+                Text("Esta sugerencia quedó guardada por tienda dentro del pedido general de la próxima semana.")
                     .font(.caption)
-                    .foregroundColor(Color(hex: "8A5A19"))
+                    .foregroundColor(AppTheme.Colors.warningText)
             }
         }
         .padding()

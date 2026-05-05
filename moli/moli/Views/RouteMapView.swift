@@ -1,5 +1,6 @@
 import MapKit
 import SwiftUI
+import UIKit
 
 private enum MapFloatingControl {
     case location
@@ -7,11 +8,11 @@ private enum MapFloatingControl {
 }
 
 struct RouteMapView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = RouteViewModel()
     @State private var locationService = RouteLocationService()
     @State private var activeMapControl: MapFloatingControl?
     @State private var isProgrammaticCameraMove = false
+    @State private var scanStore: Store?
     @State private var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 19.4326, longitude: -99.1332),
         span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
@@ -24,6 +25,9 @@ struct RouteMapView: View {
                 selectedSpotID: $viewModel.selectedSpotID,
                 spots: viewModel.routeSpots,
                 routeSegments: viewModel.routeSegments,
+                navigationUserCoordinate: nil,
+                navigationDestinationCoordinate: nil,
+                showsNativeUserAnnotation: true,
                 cameraChangedAction: clearActiveMapControlAfterUserMove
             )
 
@@ -31,8 +35,6 @@ struct RouteMapView: View {
                 RouteProgressBar(
                     completedCount: viewModel.completedStopsCount,
                     totalCount: viewModel.routeStops.count,
-                    distanceText: viewModel.totalRouteDistanceText,
-                    travelTimeText: viewModel.totalRouteTravelTimeText,
                     isCalculatingRoute: viewModel.isCalculatingRoute
                 )
                 .padding()
@@ -50,14 +52,6 @@ struct RouteMapView: View {
         .navigationTitle("Tu Ruta")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(action: dismissView) {
-                    Image(systemName: "chevron.left")
-                }
-                .tint(AppTheme.Colors.textPrimary)
-            }
-        }
         .task {
             await loadRoute()
         }
@@ -67,11 +61,15 @@ struct RouteMapView: View {
                 isNavigationActive: viewModel.isNavigationActive,
                 routeErrorMessage: viewModel.routeErrorMessage,
                 startNavigationAction: startNavigation,
-                openMapsAction: openSelectedStopInMaps
+                openMapsAction: openSelectedStopInMaps,
+                scanAction: scanSelectedStopShelf
             )
             .presentationDetents([.height(320), .medium])
             .presentationDragIndicator(.visible)
             .presentationBackgroundInteraction(.enabled(upThrough: .height(320)))
+        }
+        .navigationDestination(item: $scanStore) { store in
+            ShelfScanCameraView(store: store)
         }
         .fullScreenCover(isPresented: navigationScreenBinding) {
             RouteActiveNavigationView(
@@ -105,10 +103,6 @@ struct RouteMapView: View {
                 stopNavigation()
             }
         }
-    }
-
-    private func dismissView() {
-        dismiss()
     }
 
     private func loadRoute() async {
@@ -171,6 +165,7 @@ struct RouteMapView: View {
     }
 
     private func stopNavigation() {
+        LocalPersistenceService.shared.finalizeWeeklyOrderCart()
         viewModel.stopNavigation()
         locationService.stopFollowing()
         Task {
@@ -182,6 +177,19 @@ struct RouteMapView: View {
     private func openSelectedStopInMaps() {
         viewModel.openSelectedStopInMaps()
     }
+    
+    private func scanSelectedStopShelf() {
+        guard let store = viewModel.selectedStop?.store else {
+            return
+        }
+        
+        viewModel.selectSpot(id: nil)
+        
+        Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            scanStore = store
+        }
+    }
 }
 
 private struct RouteMap: View {
@@ -189,6 +197,9 @@ private struct RouteMap: View {
     @Binding var selectedSpotID: UUID?
     let spots: [RouteSpot]
     let routeSegments: [MKRoute]
+    let navigationUserCoordinate: CLLocationCoordinate2D?
+    let navigationDestinationCoordinate: CLLocationCoordinate2D?
+    let showsNativeUserAnnotation: Bool
     let cameraChangedAction: () -> Void
 
     var body: some View {
@@ -208,7 +219,21 @@ private struct RouteMap: View {
                 .tag(spot.id)
             }
 
-            UserAnnotation()
+            if showsNativeUserAnnotation {
+                UserAnnotation()
+            }
+
+            if let navigationDestinationCoordinate {
+                Annotation("", coordinate: navigationDestinationCoordinate) {
+                    NavigationDestinationMarker()
+                }
+            }
+
+            if let navigationUserCoordinate {
+                Annotation("", coordinate: navigationUserCoordinate) {
+                    NavigationLocationPuck()
+                }
+            }
         }
         .mapStyle(.standard(elevation: .realistic))
         .mapControls {
@@ -222,11 +247,45 @@ private struct RouteMap: View {
     }
 }
 
+private struct NavigationLocationPuck: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(AppTheme.Colors.primaryBlue.opacity(0.18))
+                .frame(width: 74, height: 74)
+                .overlay(
+                    Circle()
+                        .stroke(.white.opacity(0.75), lineWidth: 2)
+                )
+
+            Circle()
+                .fill(AppTheme.Colors.primaryBlue)
+                .frame(width: 18, height: 18)
+                .overlay(Circle().stroke(.white, lineWidth: 3))
+                .shadow(color: .black.opacity(0.18), radius: 6, x: 0, y: 3)
+        }
+    }
+}
+
+private struct NavigationDestinationMarker: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.brown.opacity(0.9))
+                .frame(width: 48, height: 48)
+                .overlay(Circle().stroke(.white, lineWidth: 3))
+                .shadow(color: .black.opacity(0.2), radius: 7, x: 0, y: 4)
+
+            Image(systemName: "building.2.fill")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.white)
+        }
+    }
+}
+
 private struct RouteProgressBar: View {
     let completedCount: Int
     let totalCount: Int
-    let distanceText: String
-    let travelTimeText: String
     let isCalculatingRoute: Bool
 
     private var progress: CGFloat {
@@ -238,17 +297,34 @@ private struct RouteProgressBar: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
-                    .foregroundColor(AppTheme.Colors.primaryBlue)
-                Text("\(completedCount) de \(totalCount) tiendas")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+        if #available(iOS 26, *) {
+            content
+                .glassEffect(.regular, in: .rect(cornerRadius: AppTheme.Radii.extraLarge))
+        } else {
+            content
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppTheme.Radii.extraLarge))
+                .shadow(color: AppTheme.Shadows.card.color, radius: AppTheme.Shadows.card.radius, x: 0, y: 4)
+        }
+    }
 
-                Spacer()
+    private var content: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                .font(.title3)
+                .foregroundColor(AppTheme.Colors.primaryBlue)
 
+            Text("\(completedCount) de \(totalCount) tiendas")
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+
+            Spacer(minLength: 20)
+
+            if isCalculatingRoute {
+                ProgressView()
+                    .scaleEffect(0.7)
+                    .tint(AppTheme.Colors.primaryBlue)
+            } else {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule()
@@ -259,26 +335,11 @@ private struct RouteProgressBar: View {
                             .frame(width: geometry.size.width * progress)
                     }
                 }
-                .frame(width: 80, height: 6)
+                .frame(width: 86, height: 7)
             }
-
-            HStack(spacing: 10) {
-                Label(distanceText, systemImage: "road.lanes")
-                Text("·")
-                Label(travelTimeText, systemImage: "clock")
-                Spacer()
-                if isCalculatingRoute {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                }
-            }
-            .font(.caption)
-            .foregroundColor(AppTheme.Colors.mutedGray)
         }
-        .padding()
-        .background(AppTheme.Colors.cardWhite)
-        .cornerRadius(AppTheme.Radii.extraLarge)
-        .shadow(color: AppTheme.Shadows.card.color, radius: AppTheme.Shadows.card.radius, x: 0, y: 4)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
     }
 }
 
@@ -380,6 +441,7 @@ private struct RouteSelectedStopSheet: View {
     let routeErrorMessage: String?
     let startNavigationAction: () -> Void
     let openMapsAction: () -> Void
+    let scanAction: () -> Void
 
     var body: some View {
         if let selectedStop {
@@ -397,7 +459,8 @@ private struct RouteSelectedStopSheet: View {
                 RouteNavigationActions(
                     store: selectedStop.store,
                     startNavigationAction: startNavigationAction,
-                    openMapsAction: openMapsAction
+                    openMapsAction: openMapsAction,
+                    scanAction: scanAction
                 )
             }
             .padding(AppTheme.Radii.large)
@@ -417,7 +480,12 @@ private struct RouteActiveNavigationView: View {
             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
         ))
     )
-    @State private var routeSheetDetent: PresentationDetent = .height(108)
+    @State private var routeSheetDetent: PresentationDetent = .height(132)
+    @State private var isVoiceGuidanceEnabled = true
+    @State private var isVoiceControlsPresented = false
+    @State private var selectedVoiceVolume: RouteVoiceVolume = .normal
+    @State private var showsRecenterButton = false
+    @State private var isProgrammaticNavigationCameraMove = false
     @State private var voiceGuidance = RouteVoiceGuidanceService()
 
     var body: some View {
@@ -427,19 +495,41 @@ private struct RouteActiveNavigationView: View {
                 selectedSpotID: .constant(nil),
                 spots: viewModel.routeSpots,
                 routeSegments: viewModel.routeSegments,
-                cameraChangedAction: {}
+                navigationUserCoordinate: locationService.currentLocation ?? viewModel.navigationRoute?.polyline.firstRouteCoordinate,
+                navigationDestinationCoordinate: activeDestinationCoordinate,
+                showsNativeUserAnnotation: false,
+                cameraChangedAction: handleNavigationCameraChanged
             )
 
             RouteNavigationInstructionBanner(
-                instruction: viewModel.navigationInstructionText,
-                stop: viewModel.activeNavigationStop
+                currentStep: viewModel.currentNavigationStep,
+                nextStep: viewModel.nextNavigationStep
             )
-            .padding(.horizontal)
-            .padding(.top, 16)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+
+            VStack {
+                Spacer(minLength: 270)
+                ActiveNavigationFloatingControls(
+                    isVoiceGuidanceEnabled: isVoiceGuidanceEnabled,
+                    routeOverviewAction: centerOnNavigationRoute,
+                    voiceAction: showVoiceControls
+                )
+                .padding(.trailing, 16)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+
+            if showsRecenterButton && !isVoiceControlsPresented {
+                ActiveNavigationRecenterButton(action: centerOnCurrentNavigationLocation)
+                    .padding(.leading, 24)
+                    .padding(.bottom, recenterButtonBottomPadding)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: routeSheetDetent)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showsRecenterButton)
+            }
         }
-        .ignoresSafeArea()
-        .persistentSystemOverlays(.hidden)
-        .statusBarHidden(true)
         .task {
             await prepareNavigation()
         }
@@ -453,15 +543,15 @@ private struct RouteActiveNavigationView: View {
             }
         }
         .sheet(isPresented: .constant(true)) {
-            RouteNavigationEndSheet(
-                stop: viewModel.activeNavigationStop,
-                distanceText: viewModel.navigationDistanceText,
-                travelTimeText: viewModel.navigationTravelTimeText,
-                stopNavigationAction: endNavigation
+            navigationSheetContent
+            .presentationDetents(
+                isVoiceControlsPresented ? [.height(430)] : [.height(132), .height(318)],
+                selection: $routeSheetDetent
             )
-            .presentationDetents([.height(108), .height(250)], selection: $routeSheetDetent)
             .presentationDragIndicator(.visible)
-            .presentationBackgroundInteraction(.enabled(upThrough: .height(108)))
+            .presentationBackground(.clear)
+            .presentationCornerRadius(34)
+            .presentationBackgroundInteraction(.enabled(upThrough: .height(132)))
             .interactiveDismissDisabled()
         }
         .onDisappear {
@@ -469,11 +559,45 @@ private struct RouteActiveNavigationView: View {
         }
     }
 
+    @ViewBuilder
+    private var navigationSheetContent: some View {
+        if isVoiceControlsPresented {
+            RouteVoiceControlsSheet(
+                isVoiceGuidanceEnabled: $isVoiceGuidanceEnabled,
+                selectedVolume: $selectedVoiceVolume,
+                closeAction: closeVoiceControls
+            )
+        } else {
+            RouteNavigationEndSheet(
+                stop: viewModel.activeNavigationStop,
+                arrivalTimeText: viewModel.navigationArrivalTimeText,
+                travelTimeText: viewModel.navigationTravelTimeText,
+                distanceText: viewModel.navigationRemainingDistanceText,
+                distanceUnitText: viewModel.navigationRemainingDistanceUnit,
+                isExpanded: routeSheetDetent != .height(132),
+                callStoreAction: callActiveStore,
+                stopNavigationAction: endNavigation
+            )
+        }
+    }
+
+    private var activeDestinationCoordinate: CLLocationCoordinate2D? {
+        guard let store = viewModel.activeNavigationStop?.store else {
+            return nil
+        }
+
+        return CLLocationCoordinate2D(latitude: store.latitude, longitude: store.longitude)
+    }
+
+    private var recenterButtonBottomPadding: CGFloat {
+        routeSheetDetent == .height(132) ? 154 : 340
+    }
+
     private func prepareNavigation() async {
         locationService.startFollowing()
 
         guard let currentLocation = locationService.currentLocation else {
-            if let stop = viewModel.activeNavigationStop {
+            if isVoiceGuidanceEnabled, let stop = viewModel.activeNavigationStop {
                 voiceGuidance.start(route: nil, destinationName: stop.store.name)
             }
             return
@@ -486,14 +610,90 @@ private struct RouteActiveNavigationView: View {
         from currentLocation: CLLocationCoordinate2D,
         shouldAnnounceStart: Bool = false
     ) async {
-        cameraPosition = .userLocation(followsHeading: true, fallback: .region(.centeredRegion(on: currentLocation)))
+        if shouldAnnounceStart || !showsRecenterButton {
+            setNavigationCamera(on: currentLocation)
+        }
+
         await viewModel.calculateNavigationRoute(startCoordinate: currentLocation)
 
-        if shouldAnnounceStart, let stop = viewModel.activeNavigationStop {
+        if isVoiceGuidanceEnabled, shouldAnnounceStart, let stop = viewModel.activeNavigationStop {
+            voiceGuidance.setVolume(selectedVoiceVolume)
             voiceGuidance.start(route: viewModel.navigationRoute, destinationName: stop.store.name)
         }
 
-        voiceGuidance.update(currentLocation: currentLocation, route: viewModel.navigationRoute)
+        if isVoiceGuidanceEnabled {
+            voiceGuidance.setVolume(selectedVoiceVolume)
+            voiceGuidance.update(currentLocation: currentLocation, route: viewModel.navigationRoute)
+        }
+    }
+
+    private func centerOnNavigationRoute() {
+        guard let route = viewModel.navigationRoute else {
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.3)) {
+            cameraPosition = .region(.fitting(route.polyline.boundingMapRect))
+        }
+
+        showsRecenterButton = true
+    }
+
+    private func centerOnCurrentNavigationLocation() {
+        guard let currentLocation = locationService.currentLocation else {
+            cameraPosition = .userLocation(followsHeading: true, fallback: .region(viewModel.mapRegion))
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.3)) {
+            setNavigationCamera(on: currentLocation)
+        }
+
+        showsRecenterButton = false
+    }
+
+    private func showVoiceControls() {
+        routeSheetDetent = .height(430)
+        isVoiceControlsPresented = true
+    }
+
+    private func closeVoiceControls() {
+        voiceGuidance.setVolume(selectedVoiceVolume)
+        if !isVoiceGuidanceEnabled {
+            voiceGuidance.stop()
+        } else if let stop = viewModel.activeNavigationStop {
+            voiceGuidance.start(route: viewModel.navigationRoute, destinationName: stop.store.name)
+        }
+
+        isVoiceControlsPresented = false
+        routeSheetDetent = .height(132)
+    }
+
+    private func setNavigationCamera(on coordinate: CLLocationCoordinate2D) {
+        isProgrammaticNavigationCameraMove = true
+        cameraPosition = .camera(.navigationCamera(on: coordinate))
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(650))
+            isProgrammaticNavigationCameraMove = false
+        }
+    }
+
+    private func handleNavigationCameraChanged() {
+        guard !isProgrammaticNavigationCameraMove else {
+            return
+        }
+
+        showsRecenterButton = true
+    }
+
+    private func callActiveStore() {
+        guard let phoneURL = URL(string: "tel://5550101234"),
+              UIApplication.shared.canOpenURL(phoneURL) else {
+            return
+        }
+
+        UIApplication.shared.open(phoneURL)
     }
 
     private func endNavigation() {
@@ -503,105 +703,420 @@ private struct RouteActiveNavigationView: View {
 }
 
 private struct RouteNavigationInstructionBanner: View {
-    let instruction: String
-    let stop: RouteStop?
+    let currentStep: RouteNavigationStepInfo
+    let nextStep: RouteNavigationStepInfo?
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "arrow.up")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-                .frame(width: 54, height: 54)
-                .background(AppTheme.Colors.primaryBlue)
-                .clipShape(Circle())
+        if #available(iOS 26, *) {
+            content
+                .glassEffect(.regular.tint(Color.black.opacity(0.56)), in: .rect(cornerRadius: 34))
+        } else {
+            content
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 34))
+                .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 34))
+                .shadow(color: AppTheme.Shadows.card.color, radius: AppTheme.Shadows.card.radius, x: 0, y: 4)
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(instruction)
-                    .font(.headline)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .lineLimit(2)
+    private var content: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 18) {
+                Image(systemName: currentStep.systemImage)
+                    .font(.system(size: 58, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 84, height: 96)
 
-                if let stop {
-                    Text("#\(stop.stopNumber) · \(stop.store.name)")
-                        .font(.subheadline)
-                        .foregroundColor(AppTheme.Colors.mutedGray)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(currentStep.distanceText)
+                        .font(.system(size: 42, weight: .heavy, design: .rounded))
+                        .foregroundColor(.white)
+                        .minimumScaleFactor(0.75)
+
+                    Text(currentStep.instruction)
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.68))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.62)
                 }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 22)
+            .padding(.bottom, 16)
+
+            if let nextStep {
+                HStack(spacing: 18) {
+                    Image(systemName: nextStep.systemImage)
+                        .font(.system(size: 40, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.74))
+                        .frame(width: 84)
+
+                    Text(nextStep.instruction)
+                        .font(.system(size: 23, weight: .bold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.78))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+                .background(Color.white.opacity(0.12))
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct ActiveNavigationFloatingControls: View {
+    let isVoiceGuidanceEnabled: Bool
+    let routeOverviewAction: () -> Void
+    let voiceAction: () -> Void
+
+    var body: some View {
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 16) {
+                buttons
+            }
+        } else {
+            buttons
+        }
+    }
+
+    private var buttons: some View {
+        VStack(spacing: 16) {
+            ActiveNavigationFloatingButton(systemImage: "point.topleft.down.curvedto.point.bottomright.up", action: routeOverviewAction)
+            ActiveNavigationFloatingButton(
+                systemImage: isVoiceGuidanceEnabled ? "speaker.wave.3.fill" : "speaker.slash.fill",
+                action: voiceAction
+            )
+        }
+    }
+}
+
+private struct ActiveNavigationRecenterButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "location.fill")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundColor(AppTheme.Colors.primaryBlue)
+                .frame(width: 68, height: 68)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .activeNavigationButtonSurface()
+    }
+}
+
+private struct ActiveNavigationFloatingButton: View {
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 25, weight: .bold))
+                .foregroundColor(.black)
+                .frame(width: 66, height: 66)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .activeNavigationButtonSurface()
+    }
+}
+
+private struct RouteVoiceControlsSheet: View {
+    @Binding var isVoiceGuidanceEnabled: Bool
+    @Binding var selectedVolume: RouteVoiceVolume
+    let closeAction: () -> Void
+
+    var body: some View {
+        if #available(iOS 26, *) {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .glassEffect(.regular, in: .rect(cornerRadius: 34))
+        } else {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 34))
+        }
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            HStack {
+                Text("Voice Controls")
+                    .font(.title2)
+                    .fontWeight(.heavy)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+
+                Spacer()
+
+                Button(action: closeAction) {
+                    Image(systemName: "xmark")
+                        .font(.headline)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .frame(width: 42, height: 42)
+                        .background(AppTheme.Colors.cardWhite.opacity(0.55), in: Circle())
+                }
+                .buttonStyle(.plain)
             }
 
-            Spacer(minLength: 0)
+            VoiceMutePicker(isVoiceGuidanceEnabled: $isVoiceGuidanceEnabled)
 
-            Image(systemName: "speaker.wave.2.fill")
-                .foregroundColor(AppTheme.Colors.primaryBlue)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Volume")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+
+                VStack(spacing: 0) {
+                    ForEach(RouteVoiceVolume.allCases) { volume in
+                        Button {
+                            selectedVolume = volume
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: volume == selectedVolume ? "waveform.circle.fill" : "waveform.circle")
+                                    .font(.title2)
+                                    .foregroundColor(volume == selectedVolume ? .blue : AppTheme.Colors.mutedGray)
+
+                                Text(volume.title)
+                                    .font(.headline)
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+
+                                Spacer()
+
+                                if volume == selectedVolume {
+                                    Image(systemName: "checkmark")
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                            .padding(.horizontal, 18)
+                            .frame(height: 58)
+                        }
+                        .buttonStyle(.plain)
+
+                        if volume != RouteVoiceVolume.allCases.last {
+                            Divider()
+                                .padding(.leading, 64)
+                        }
+                    }
+                }
+                .background(AppTheme.Colors.cardWhite.opacity(0.52), in: RoundedRectangle(cornerRadius: 24))
+            }
         }
-        .padding()
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radii.extraLarge))
-        .shadow(color: AppTheme.Shadows.card.color, radius: AppTheme.Shadows.card.radius, x: 0, y: 4)
+        .padding(.horizontal, 24)
+        .padding(.top, 22)
+        .padding(.bottom, 26)
+    }
+}
+
+private struct VoiceMutePicker: View {
+    @Binding var isVoiceGuidanceEnabled: Bool
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button {
+                isVoiceGuidanceEnabled = false
+            } label: {
+                VoiceMuteOption(
+                    systemImage: "speaker.slash.fill",
+                    title: "Muted",
+                    isSelected: !isVoiceGuidanceEnabled
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                isVoiceGuidanceEnabled = true
+            } label: {
+                VoiceMuteOption(
+                    systemImage: "speaker.wave.3.fill",
+                    title: "Unmuted",
+                    isSelected: isVoiceGuidanceEnabled
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(6)
+        .background(AppTheme.Colors.cardWhite.opacity(0.45), in: Capsule())
+    }
+}
+
+private struct VoiceMuteOption: View {
+    let systemImage: String
+    let title: String
+    let isSelected: Bool
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 30, weight: .bold))
+                .foregroundColor(isSelected ? AppTheme.Colors.textPrimary : AppTheme.Colors.mutedGray)
+                .frame(height: 52)
+
+            Text(title)
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundColor(isSelected ? AppTheme.Colors.textPrimary : AppTheme.Colors.mutedGray)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background {
+            if isSelected {
+                Capsule()
+                    .fill(AppTheme.Colors.cardWhite.opacity(0.82))
+            }
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func activeNavigationButtonSurface() -> some View {
+        if #available(iOS 26, *) {
+            self.glassEffect(.regular.interactive(), in: .circle)
+        } else {
+            self.background(.regularMaterial, in: Circle())
+                .shadow(color: AppTheme.Shadows.card.color, radius: AppTheme.Shadows.card.radius, x: 0, y: 4)
+        }
     }
 }
 
 private struct RouteNavigationEndSheet: View {
     let stop: RouteStop?
-    let distanceText: String
+    let arrivalTimeText: String
     let travelTimeText: String
+    let distanceText: String
+    let distanceUnitText: String
+    let isExpanded: Bool
+    let callStoreAction: () -> Void
     let stopNavigationAction: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(travelTimeText)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                    Text(distanceText)
-                        .font(.subheadline)
-                        .foregroundColor(AppTheme.Colors.mutedGray)
-                }
+        if #available(iOS 26, *) {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .glassEffect(.regular, in: .rect(cornerRadius: 34))
+        } else {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 34))
+        }
+    }
 
-                Spacer()
+    private var content: some View {
+        VStack(spacing: 18) {
+            NavigationSummaryMetrics(
+                arrivalTimeText: arrivalTimeText,
+                travelTimeText: travelTimeText,
+                distanceText: distanceText,
+                distanceUnitText: distanceUnitText
+            )
 
-                if let stop {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("Parada #\(stop.stopNumber)")
-                            .font(.caption)
+            if isExpanded {
+                VStack(spacing: 16) {
+                    if let stop {
+                        DestinationCallRow(store: stop.store, callStoreAction: callStoreAction)
+                    }
+
+                    Button(action: stopNavigationAction) {
+                        Text("Terminar ruta")
+                            .font(.headline)
                             .fontWeight(.bold)
-                            .foregroundColor(AppTheme.Colors.primaryBlue)
-                        Text(stop.store.name)
-                            .font(.subheadline)
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .lineLimit(1)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 64)
+                            .background(AppTheme.Colors.bimboRed)
+                            .foregroundColor(.white)
+                            .clipShape(Capsule())
                     }
                 }
-            }
-
-            if let stop {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Destino")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppTheme.Colors.mutedGray)
-                    Text(stop.store.address)
-                        .font(.subheadline)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(2)
-                }
-            }
-
-            Button(action: stopNavigationAction) {
-                Text("TERMINAR RUTA")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(AppTheme.Colors.primaryBlue)
-                    .foregroundColor(.white)
-                    .cornerRadius(AppTheme.Radii.medium)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .padding(AppTheme.Radii.large)
+        .padding(.horizontal, 24)
+        .padding(.top, 22)
+        .padding(.bottom, isExpanded ? 18 : 12)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isExpanded)
+    }
+}
+
+private struct NavigationSummaryMetrics: View {
+    let arrivalTimeText: String
+    let travelTimeText: String
+    let distanceText: String
+    let distanceUnitText: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            NavigationSummaryMetric(value: arrivalTimeText, label: "arrival")
+            NavigationSummaryMetric(value: travelTimeText.replacingOccurrences(of: " min", with: ""), label: "min")
+            NavigationSummaryMetric(value: distanceText, label: distanceUnitText)
+        }
+    }
+}
+
+private struct NavigationSummaryMetric: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 34, weight: .heavy, design: .rounded))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .monospacedDigit()
+
+            Text(label)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundColor(AppTheme.Colors.mutedGray)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct DestinationCallRow: View {
+    let store: Store
+    let callStoreAction: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "building.2.fill")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .frame(width: 52, height: 52)
+                .background(Color.brown.opacity(0.82))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(store.name)
+                    .font(.headline)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                Text(store.address)
+                    .font(.caption)
+                    .foregroundColor(AppTheme.Colors.mutedGray)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            Button(action: callStoreAction) {
+                Image(systemName: "phone.fill")
+                    .font(.title2)
+                    .foregroundColor(.blue)
+                    .frame(width: 52, height: 52)
+                    .background(.regularMaterial, in: Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(AppTheme.Colors.cardWhite.opacity(0.62), in: Capsule())
     }
 }
 
@@ -697,6 +1212,7 @@ private struct RouteNavigationActions: View {
     let store: Store
     let startNavigationAction: () -> Void
     let openMapsAction: () -> Void
+    let scanAction: () -> Void
 
     var body: some View {
         VStack(spacing: 10) {
@@ -728,10 +1244,10 @@ private struct RouteNavigationActions: View {
                     .cornerRadius(AppTheme.Radii.medium)
                 }
 
-                NavigationLink(destination: StoreArrivalView(store: store)) {
+                Button(action: scanAction) {
                     HStack {
-                        Image(systemName: "storefront.fill")
-                        Text("Llegué")
+                        Image(systemName: "camera.fill")
+                        Text("Escanear")
                     }
                     .font(.subheadline)
                     .fontWeight(.bold)
@@ -747,6 +1263,11 @@ private struct RouteNavigationActions: View {
 }
 
 private extension MKCoordinateRegion {
+    static func fitting(_ mapRect: MKMapRect) -> MKCoordinateRegion {
+        let paddedRect = mapRect.insetBy(dx: -mapRect.width * 0.28, dy: -mapRect.height * 0.28)
+        return MKCoordinateRegion(paddedRect)
+    }
+
     static func centeredRegion(on coordinate: CLLocationCoordinate2D) -> MKCoordinateRegion {
         MKCoordinateRegion(
             center: coordinate,
@@ -759,6 +1280,27 @@ private extension MKCoordinateRegion {
             center: coordinate,
             span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
         )
+    }
+}
+
+private extension MapCamera {
+    static func navigationCamera(on coordinate: CLLocationCoordinate2D) -> MapCamera {
+        MapCamera(
+            centerCoordinate: coordinate,
+            distance: 650,
+            heading: 0,
+            pitch: 58
+        )
+    }
+}
+
+private extension MKPolyline {
+    var firstRouteCoordinate: CLLocationCoordinate2D? {
+        guard pointCount > 0 else {
+            return nil
+        }
+
+        return points()[0].coordinate
     }
 }
 

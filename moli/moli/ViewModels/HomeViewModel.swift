@@ -11,7 +11,8 @@ struct ProductExpirationAlert: Identifiable, Hashable {
 
 struct ReadyOrderSummary: Identifiable, Hashable {
     let id = UUID()
-    let storeName: String
+    let title: String
+    let subtitle: String
     let pieces: Int
     let totalMXN: Int
 }
@@ -40,12 +41,29 @@ final class HomeViewModel {
             self.nextStoreName = next.store.name
         }
         
-        self.readyOrderSummaries = LocalPersistenceService.shared.dailyOrders.map { order in
+        let cart = LocalPersistenceService.shared.weeklyOrderCart
+        var summaries: [ReadyOrderSummary] = []
+        
+        if !cart.entries.isEmpty {
+            summaries.append(
+                ReadyOrderSummary(
+                    title: "Carrito semanal",
+                    subtitle: "\(cart.storeCount) tiendas agregadas",
+                    pieces: cart.totalPieces,
+                    totalMXN: cart.totalPieces * 15
+                )
+            )
+        }
+        
+        summaries += LocalPersistenceService.shared.weeklyOrders.map { order in
             ReadyOrderSummary(
-                storeName: order.store.name,
+                title: "Pedido semana siguiente",
+                subtitle: "\(order.storeCount) tiendas · \(order.routeName)",
                 pieces: order.totalPieces,
                 totalMXN: order.totalPieces * 15
             )
         }
+        
+        self.readyOrderSummaries = summaries
     }
 }

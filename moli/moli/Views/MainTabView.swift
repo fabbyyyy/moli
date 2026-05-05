@@ -17,7 +17,7 @@ struct MainTabView: View {
 
             DailyOrdersView()
                 .tabItem {
-                    Label("Pedidos", systemImage: "doc.text")
+                    Label("Histórico", systemImage: "clock.arrow.circlepath")
                 }
         }
         .tint(AppTheme.Colors.primaryBlue)
