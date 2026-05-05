@@ -256,6 +256,9 @@
 				DEVELOPMENT_TEAM = JQ3PPD76M8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Moli usa la cámara para tomar la foto del anaquel.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Moli usa tu ubicación para centrar el mapa y guiarte por tu ruta.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Moli puede seleccionar una foto del anaquel cuando la cámara no esté disponible.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -288,6 +291,9 @@
 				DEVELOPMENT_TEAM = JQ3PPD76M8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Moli usa la cámara para tomar la foto del anaquel.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Moli usa tu ubicación para centrar el mapa y guiarte por tu ruta.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Moli puede seleccionar una foto del anaquel cuando la cámara no esté disponible.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
