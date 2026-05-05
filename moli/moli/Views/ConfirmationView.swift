@@ -3,11 +3,9 @@ import SwiftUI
 struct ConfirmationView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: ConfirmationViewModel
-    let nextStoreAction: () -> Void
 
-    init(store: Store, pieces: Int, wasteAvoided: Double, nextStoreAction: @escaping () -> Void = {}) {
+    init(store: Store, pieces: Int, wasteAvoided: Double) {
         _viewModel = State(initialValue: ConfirmationViewModel(store: store, pieces: pieces, wasteAvoided: wasteAvoided))
-        self.nextStoreAction = nextStoreAction
     }
 
     var body: some View {
@@ -24,7 +22,7 @@ struct ConfirmationView: View {
 
                 Spacer()
 
-                Button(action: nextStoreAction) {
+                NavigationLink(destination: MainTabView()) {
                     HStack {
                         Image(systemName: "arrow.right")
                         Text("SIGUIENTE TIENDA")
@@ -34,15 +32,13 @@ struct ConfirmationView: View {
                     .padding()
                     .background(AppTheme.Colors.primaryBlue)
                     .foregroundColor(.white)
-                    .clipShape(Capsule())
+                    .cornerRadius(AppTheme.Radii.medium)
                 }
-                .buttonStyle(.plain)
                 .padding(.horizontal)
                 .padding(.bottom, 20)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
     }
 }
 

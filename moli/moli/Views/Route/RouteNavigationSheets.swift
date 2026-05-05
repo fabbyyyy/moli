@@ -11,7 +11,6 @@ struct RouteNavigationEndSheet: View {
     let distanceUnitText: String
     let isExpanded: Bool
     let callStoreAction: () -> Void
-    let scanStoreAction: () -> Void
     let stopNavigationAction: () -> Void
 
     var body: some View {
@@ -40,21 +39,6 @@ struct RouteNavigationEndSheet: View {
                     if let stop {
                         DestinationCallRow(store: stop.store, callStoreAction: callStoreAction)
                     }
-
-                    Button(action: scanStoreAction) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "camera.fill")
-                            Text("Escanear anaquel")
-                                .fontWeight(.bold)
-                        }
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 58)
-                        .background(AppTheme.Colors.softBlue)
-                        .foregroundColor(AppTheme.Colors.primaryBlue)
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
 
                     Button(action: stopNavigationAction) {
                         Text("Terminar ruta")

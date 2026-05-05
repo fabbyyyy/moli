@@ -6,7 +6,7 @@ struct RouteMapView: View {
     @State private var locationService = RouteLocationService()
     @State private var activeMapControl: MapFloatingControl?
     @State private var isProgrammaticCameraMove = false
-    @State private var scanStore: Store?
+    @State private var scanStore: Store? // El trigger para la navegación
     @State private var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 19.4326, longitude: -99.1332),
         span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
@@ -49,11 +49,9 @@ struct RouteMapView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         
-        .fullScreenCover(item: $scanStore) { store in
-            NavigationStack {
-                ShelfScanCameraView(store: store, nextStoreAction: completeScanFlowFromRouteMap)
-            }
-            .toolbar(.hidden, for: .tabBar)
+        // --- NAVEGACIÓN A STORE ARRIVAL ---
+        .navigationDestination(item: $scanStore) { store in
+            StoreArrivalView(store: store)
         }
         
         // Pantalla completa para navegación paso a paso
@@ -74,7 +72,7 @@ struct RouteMapView: View {
                 routeErrorMessage: viewModel.routeErrorMessage,
                 startNavigationAction: startNavigation,
                 openMapsAction: openSelectedStopInMaps,
-                scanAction: scanSelectedStopShelf
+                scanAction: scanSelectedStopShelf // <--- Este activa la función de abajo
             )
             .presentationDetents([.height(320), .medium])
             .presentationDragIndicator(.visible)
@@ -163,24 +161,18 @@ struct RouteMapView: View {
         viewModel.openSelectedStopInMaps()
     }
 
+    // CONEXIÓN A STORE ARRIVAL VIEW
     private func scanSelectedStopShelf() {
         guard let store = viewModel.selectedStop?.store else { return }
 
+        // 1. Quitamos la selección para cerrar el sheet
         viewModel.selectSpot(id: nil)
 
+        // 2. Pequeño delay para que el sheet se guarde antes de navegar
         Task {
             try? await Task.sleep(for: .milliseconds(300))
+            // 3. Al asignar la tienda, .navigationDestination dispara StoreArrivalView
             scanStore = store
-        }
-    }
-
-    private func completeScanFlowFromRouteMap() {
-        scanStore = nil
-        viewModel.loadRoute()
-
-        Task {
-            await viewModel.calculateRouteFromCurrentOrder()
-            cameraPosition = .region(viewModel.mapRegion)
         }
     }
 

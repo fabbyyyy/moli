@@ -21,8 +21,6 @@ struct RouteActiveNavigationView: View {
     @State private var showsRecenterButton = false
     @State private var isProgrammaticNavigationCameraMove = false
     @State private var voiceGuidance = RouteVoiceGuidanceService()
-    @State private var scanStore: Store?
-    @State private var isNavigationSheetPresented = true
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -77,7 +75,7 @@ struct RouteActiveNavigationView: View {
                 await updateNavigation(from: currentLocation)
             }
         }
-        .sheet(isPresented: $isNavigationSheetPresented) {
+        .sheet(isPresented: .constant(true)) {
             navigationSheetContent
             .presentationDetents(
                 isVoiceControlsPresented ? [.height(430)] : [.height(132), .height(318)],
@@ -88,12 +86,6 @@ struct RouteActiveNavigationView: View {
             .presentationCornerRadius(34)
             .presentationBackgroundInteraction(.enabled(upThrough: .height(132)))
             .interactiveDismissDisabled()
-        }
-        .fullScreenCover(item: $scanStore) { store in
-            NavigationStack {
-                ShelfScanCameraView(store: store, nextStoreAction: completeScanFlowFromActiveNavigation)
-            }
-            .toolbar(.hidden, for: .tabBar)
         }
         .onDisappear {
             voiceGuidance.stop()
@@ -117,7 +109,6 @@ struct RouteActiveNavigationView: View {
                 distanceUnitText: viewModel.navigationRemainingDistanceUnit,
                 isExpanded: routeSheetDetent != .height(132),
                 callStoreAction: callActiveStore,
-                scanStoreAction: scanActiveStoreShelf,
                 stopNavigationAction: endNavigation
             )
         }
@@ -228,38 +219,6 @@ struct RouteActiveNavigationView: View {
         }
 
         UIApplication.shared.open(phoneURL)
-    }
-
-    private func scanActiveStoreShelf() {
-        guard let store = viewModel.activeNavigationStop?.store else {
-            return
-        }
-
-        routeSheetDetent = .height(132)
-        isNavigationSheetPresented = false
-
-        Task {
-            try? await Task.sleep(for: .milliseconds(250))
-            scanStore = store
-        }
-    }
-
-    private func completeScanFlowFromActiveNavigation() {
-        scanStore = nil
-        isNavigationSheetPresented = true
-        viewModel.loadRoute()
-
-        if let nextStop = viewModel.routeStops.first(where: { !$0.isCompleted }) {
-            viewModel.startNavigation(to: nextStop)
-
-            if let currentLocation = locationService.currentLocation {
-                Task {
-                    await updateNavigation(from: currentLocation, shouldAnnounceStart: true)
-                }
-            }
-        } else {
-            endNavigation()
-        }
     }
 
     private func endNavigation() {
