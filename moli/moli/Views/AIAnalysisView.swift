@@ -1,12 +1,17 @@
 import SwiftUI
+import AVFoundation
 
 struct AIAnalysisView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: AIAnalysisViewModel
     @State private var navigateToConfirmation = false
+    @State private var synthesizer = AVSpeechSynthesizer()
+    @State private var isSpeaking = false
+    let manosLibres: Bool
 
-    init(store: Store, imagePath: String? = nil, image: UIImage? = nil) {
-        _viewModel = State(initialValue: AIAnalysisViewModel(store: store, imagePath: imagePath, image: image))
+    init(store: Store, imagePath: String? = nil, images: [UIImage] = [], manosLibres: Bool = false) {
+        _viewModel = State(initialValue: AIAnalysisViewModel(store: store, imagePath: imagePath, images: images))
+        self.manosLibres = manosLibres
     }
 
     var body: some View {
@@ -17,9 +22,20 @@ struct AIAnalysisView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     AnalysisReadyHeader(storeName: viewModel.store.name)
 
-                    // --- SECCIÓN A: ANAQUEL (Huecos + Caducidad) ---
-                    if !viewModel.shelfInsights.isEmpty {
-                        InsightSection(label: "A · ANAQUEL", title: "Análisis de Imagen", insights: viewModel.shelfInsights)
+                    // --- SECCIONES POR ANAQUEL ---
+                    ForEach(viewModel.shelfResults) { result in
+                        InsightSection(
+                            label: "ANAQUEL \(result.shelfNumber)",
+                            title: "Análisis de Imagen",
+                            insights: result.insights,
+                            speechButton: (manosLibres && result.shelfNumber == 1) ? AnyView(
+                                Button(action: toggleSpeech) {
+                                    Image(systemName: isSpeaking ? "stop.circle.fill" : "play.circle.fill")
+                                        .font(.system(size: 26))
+                                        .foregroundColor(isSpeaking ? .red : AppTheme.Colors.primaryBlue)
+                                }
+                            ) : nil
+                        )
                     }
 
                     // --- SECCIÓN B: HISTORIAL ---
@@ -44,6 +60,7 @@ struct AIAnalysisView: View {
             if !viewModel.isLoading {
                 AnalysisBottomBar(totalPieces: viewModel.totalRecommendedPieces, confirmAction: confirmOrder)
             }
+
         }
         .overlay { if viewModel.isLoading { AnalysisLoadingView() } }
         .navigationDestination(isPresented: $navigateToConfirmation) {
@@ -52,6 +69,61 @@ struct AIAnalysisView: View {
             }
         }
         .task { await viewModel.analyze() }
+        .onChange(of: viewModel.isLoading) { _, loading in
+            if !loading && manosLibres { speakAnalysis() }
+        }
+        .onDisappear { synthesizer.stopSpeaking(at: .immediate); isSpeaking = false }
+    }
+
+    private func toggleSpeech() {
+        if isSpeaking {
+            synthesizer.stopSpeaking(at: .immediate)
+            isSpeaking = false
+        } else {
+            speakAnalysis()
+        }
+    }
+
+    private func speakAnalysis() {
+        synthesizer.stopSpeaking(at: .immediate)
+        isSpeaking = true
+
+        var partes: [String] = ["Análisis completado. \(viewModel.store.name)."]
+
+        for result in viewModel.shelfResults {
+            partes.append("Anaquel \(result.shelfNumber).")
+            for i in result.insights {
+                partes.append("\(i.title). \(i.description)")
+            }
+        }
+        if !viewModel.historyInsights.isEmpty {
+            partes.append("Tendencias de venta.")
+            for i in viewModel.historyInsights {
+                partes.append("\(i.title). \(i.description)")
+            }
+        }
+        if !viewModel.contextInsights.isEmpty {
+            partes.append("Eventos actuales.")
+            for i in viewModel.contextInsights {
+                partes.append("\(i.title). \(i.description)")
+            }
+        }
+        if !viewModel.recommendations.isEmpty {
+            partes.append("Pedido sugerido: \(viewModel.totalRecommendedPieces) piezas.")
+            for r in viewModel.recommendations {
+                partes.append("\(r.editableQuantity) \(r.product.name).")
+            }
+        }
+
+        let texto = partes.joined(separator: " ")
+        let utterance = AVSpeechUtterance(string: texto)
+        utterance.voice = AVSpeechSynthesisVoice(language: "es-MX")
+        utterance.rate = 0.50
+        utterance.pitchMultiplier = 1.0
+        let delegate = SpeechDelegate { isSpeaking = false }
+        synthesizer.delegate = delegate
+        objc_setAssociatedObject(synthesizer, &AssociatedKeys.delegate, delegate, .OBJC_ASSOCIATION_RETAIN)
+        synthesizer.speak(utterance)
     }
 
     private func confirmOrder() {
@@ -60,15 +132,33 @@ struct AIAnalysisView: View {
     }
 }
 
+private enum AssociatedKeys { static var delegate = 0 }
+
+private class SpeechDelegate: NSObject, AVSpeechSynthesizerDelegate {
+    let onFinish: () -> Void
+    init(onFinish: @escaping () -> Void) { self.onFinish = onFinish }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async { self.onFinish() }
+    }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async { self.onFinish() }
+    }
+}
+
 // MARK: - COMPONENTE DE TARJETAS (INSIGHTS)
 private struct InsightSection: View {
     let label: String
     let title: String
     let insights: [AIInsight]
+    var speechButton: AnyView? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionTitle(label: label, title: title)
+            HStack(alignment: .bottom) {
+                SectionTitle(label: label, title: title)
+                Spacer()
+                if let btn = speechButton { btn }
+            }
             
             ForEach(insights, id: \.id) { insight in
                 HStack(spacing: 0) {
@@ -149,11 +239,32 @@ private struct AnalysisReadyHeader: View {
 private struct RecommendationSection: View {
     @Binding var recommendations: [Recommendation]
     let totalPieces: Int
+
+    var totalMXN: Double {
+        recommendations.reduce(0) { $0 + Double($1.editableQuantity) * $1.product.unitPriceMXN }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionTitle(label: "D · PEDIDO", title: "Sugerencia: \(totalPieces) pzas")
             ForEach($recommendations) { $rec in
                 ProductRecommendationCard(recommendation: $rec)
+            }
+            HStack {
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("TOTAL DEL PEDIDO")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppTheme.Colors.mutedGray)
+                    Text("$\(totalMXN, specifier: "%.2f") MXN")
+                        .font(.title3)
+                        .fontWeight(.heavy)
+                        .foregroundColor(AppTheme.Colors.primaryBlue)
+                }
+                .padding()
+                .background(AppTheme.Colors.cardWhite)
+                .cornerRadius(AppTheme.Radii.medium)
             }
         }
     }

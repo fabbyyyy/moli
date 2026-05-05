@@ -19,7 +19,8 @@ struct MockStores {
         latitude: 19.4219,
         longitude: -99.1429,
         coordinatesMockX: 0.3,
-        coordinatesMockY: 0.6
+        coordinatesMockY: 0.6,
+        imageName: "bimbo_mx_"
     )
     
     static let elSol = Store(
@@ -40,7 +41,8 @@ struct MockStores {
         latitude: 19.4285,
         longitude: -99.1340,
         coordinatesMockX: 0.5,
-        coordinatesMockY: 0.4
+        coordinatesMockY: 0.4,
+        imageName: "bimbo_mx_"
     )
     
     static let guadalupe = Store(
@@ -61,7 +63,8 @@ struct MockStores {
         latitude: 19.4360,
         longitude: -99.1230,
         coordinatesMockX: 0.7,
-        coordinatesMockY: 0.2
+        coordinatesMockY: 0.2,
+        imageName: "bimbo_mx_"
     )
     
     static let allStores: [Store] = [elPino, elSol, guadalupe]

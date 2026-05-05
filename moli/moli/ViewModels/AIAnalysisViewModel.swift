@@ -27,114 +27,118 @@ struct ExpiryResult {
     let requiereAtencionUrgente: Bool
 }
 
-// --- 2. VIEWMODEL PRINCIPAL ---
+// --- 2. RESULTADO POR ANAQUEL ---
+struct ShelfAnalysisResult: Identifiable {
+    let id = UUID()
+    let shelfNumber: Int
+    let insights: [AIInsight]
+}
+
+// --- 3. VIEWMODEL PRINCIPAL ---
 @MainActor
 @Observable
 final class AIAnalysisViewModel {
     let store: Store
     private let imagePath: String?
-    private let uiImage: UIImage?
-    
+    private let uiImages: [UIImage]
+
     var isLoading: Bool = true
-    var shelfInsights: [AIInsight] = []
+    var shelfResults: [ShelfAnalysisResult] = []
     var historyInsights: [AIInsight] = []
     var contextInsights: [AIInsight] = []
     var recommendations: [Recommendation] = []
     var order: Order?
-    
-    // Instancias de los detectores (Definidos abajo)
+
     private let visionClassifier = ShelfClassifier()
     private let expiryDetector = ExpiryDetector()
-    
+
     let aiService: AIAnalysisProviding
     let recommendationService: RecommendationService
 
-    init(store: Store, imagePath: String? = nil, image: UIImage? = nil, aiService: AIAnalysisProviding? = nil) {
+    init(store: Store, imagePath: String? = nil, images: [UIImage] = [], aiService: AIAnalysisProviding? = nil) {
         self.store = store
         self.imagePath = imagePath
-        self.uiImage = image
+        self.uiImages = images
         self.aiService = aiService ?? MockFoundationModelAIService()
         self.recommendationService = RecommendationService(aiService: self.aiService)
     }
-    
+
     func analyze() async {
         isLoading = true
         do {
             let allInsightsFromServer = try await aiService.analyzeShelf(storeId: store.id, imagePath: imagePath)
-            
-            if let image = uiImage {
-                // Ejecución en paralelo
-                async let shelfTask = visionClassifier.classify(image: image)
-                async let expiryTask = Task.detached(priority: .userInitiated) {
-                    self.expiryDetector.detect(image: image)
-                }.value
-                
-                let (visionResult, expiryResult) = await (shelfTask, expiryTask)
-                
-                let productoDetectado = "Takis"
-                // Corregido: Referencia a visionResult.estado
-                let estaRealmenteLleno = visionResult.estado == .lleno && visionResult.confidence > 0.60
-                
-                // --- TARJETA DE HUECOS ---
-                let gapInsight = AIInsight(
-                    id: UUID(),
-                    type: .gap,
-                    title: estaRealmenteLleno ? "Surtido completo" : "Resurtir \(visionResult.huecosEstimados) \(productoDetectado)",
-                    description: estaRealmenteLleno ? "Anaquel optimizado." : "Se recomienda resurtir \(visionResult.huecosEstimados) bolsas de Takis moradas en este anaquel.",
-                    severity: estaRealmenteLleno ? .low : .high,
-                    relatedProductName: productoDetectado
-                )
 
-                // --- TARJETA DE CADUCIDAD (solo si hay problema, nunca si están frescos) ---
-                var expiryInsights: [AIInsight] = []
-                if expiryResult.estadoCaducidad != .todo_fresco {
-                    let descripcionCaducidad: String
-                    switch expiryResult.estadoCaducidad {
-                    case .revisar_pronto:
-                        descripcionCaducidad = "Los \(productoDetectado) con sticker rosa están a una semana de caducarse, retíralos ya."
-                    case .retirar_urgente:
-                        descripcionCaducidad = "Los \(productoDetectado) con sticker rojo están vencidos, retíralos de inmediato."
-                    case .todo_fresco:
-                        descripcionCaducidad = ""
-                    }
-                    expiryInsights.append(AIInsight(
-                        id: UUID(),
-                        type: .expiringSoon,
-                        title: "Caducidad: \(productoDetectado)",
-                        description: descripcionCaducidad,
-                        severity: severityParaCaducidad(expiryResult.estadoCaducidad),
-                        relatedProductName: productoDetectado
+            if !uiImages.isEmpty {
+                var results: [ShelfAnalysisResult] = []
+
+                for (index, image) in uiImages.enumerated() {
+                    async let shelfTask = visionClassifier.classify(image: image)
+                    async let expiryTask = Task.detached(priority: .userInitiated) {
+                        self.expiryDetector.detect(image: image)
+                    }.value
+
+                    let (visionResult, expiryResult) = await (shelfTask, expiryTask)
+                    let producto = "Takis"
+                    let lleno = visionResult.estado == .lleno && visionResult.confidence > 0.60
+
+                    var insights: [AIInsight] = []
+
+                    insights.append(AIInsight(
+                        id: UUID(), type: .gap,
+                        title: lleno ? "Surtido completo" : "Resurtir \(visionResult.huecosEstimados) \(producto)",
+                        description: lleno ? "Anaquel optimizado." : "Se recomienda resurtir \(visionResult.huecosEstimados) bolsas de Takis moradas en este anaquel.",
+                        severity: lleno ? .low : .high,
+                        relatedProductName: producto
                     ))
+
+                    if expiryResult.estadoCaducidad != .todo_fresco {
+                        let desc: String
+                        switch expiryResult.estadoCaducidad {
+                        case .revisar_pronto:  desc = "Los \(producto) con sticker rosa están a una semana de caducarse, retíralos ya."
+                        case .retirar_urgente: desc = "Los \(producto) con sticker rojo están vencidos, retíralos de inmediato."
+                        case .todo_fresco:     desc = ""
+                        }
+                        insights.append(AIInsight(
+                            id: UUID(), type: .expiringSoon,
+                            title: "Caducidad: \(producto)", description: desc,
+                            severity: severityParaCaducidad(expiryResult.estadoCaducidad),
+                            relatedProductName: producto
+                        ))
+                    }
+
+                    results.append(ShelfAnalysisResult(shelfNumber: index + 1, insights: insights))
                 }
 
-                self.shelfInsights = [gapInsight] + expiryInsights
-                self.historyInsights = allInsightsFromServer.filter { $0.type == .trend || $0.type == .rotation }
-                self.contextInsights = allInsightsFromServer.filter { $0.type == .warning }
+                self.shelfResults = results
             }
-            
-            let combined = shelfInsights + historyInsights + contextInsights
+
+            self.historyInsights = allInsightsFromServer.filter { $0.type == .trend || $0.type == .rotation }
+            self.contextInsights = allInsightsFromServer.filter { $0.type == .warning }
+
+            let allShelfInsights = shelfResults.flatMap { $0.insights }
+            let combined = allShelfInsights + historyInsights + contextInsights
             self.order = try await recommendationService.generateOrder(for: store, insights: combined)
             self.recommendations = self.order?.recommendations ?? []
-            
+
             isLoading = false
         } catch {
             print("Error: \(error)")
             isLoading = false
         }
     }
-    
+
     private func severityParaCaducidad(_ estado: EstadoCaducidad) -> InsightSeverity {
         switch estado {
-            case .todo_fresco: return .low
-            case .revisar_pronto: return .medium
-            case .retirar_urgente: return .high
+        case .todo_fresco:     return .low
+        case .revisar_pronto:  return .medium
+        case .retirar_urgente: return .high
         }
     }
-    
+
     var totalRecommendedPieces: Int {
         recommendations.reduce(0) { $0 + $1.editableQuantity }
     }
-    
+
     func confirmOrder() {
         guard var currentOrder = order else { return }
         currentOrder.recommendations = recommendations
@@ -214,7 +218,7 @@ class ExpiryDetector {
             }
         }
 
-        let threshold = 6
+        let threshold = 8
         if redCount > threshold {
             return ExpiryResult(etiquetasVerdes: 0, etiquetasAzules: 0, etiquetasRojas: redCount,
                                 estadoCaducidad: .retirar_urgente, mensajeVoz: "", requiereAtencionUrgente: true)
@@ -238,14 +242,19 @@ class ExpiryDetector {
         return (h * 360, mx == 0 ? 0 : d / mx, mx)
     }
 
-    // Rosa: tono 300-355°, saturado y brillante
+    // Rosa: cubre rosa claro (pastel), rosa fuerte, magenta y rosa-rojo
+    // H: 285-355°, S bajo (0.12) para pasteles, V alto para claridad
     private func isPink(h: CGFloat, s: CGFloat, v: CGFloat) -> Bool {
-        (h >= 300 && h <= 355) && s >= 0.25 && v >= 0.50
+        let hueOk = (h >= 285 && h <= 355)
+        let satOk = s >= 0.12
+        let valOk = v >= 0.45
+        // También captura rosa claro donde R alto, G bajo, B medio-alto
+        return hueOk && satOk && valOk
     }
 
-    // Rojo: tono 0-15° o 355-360°
+    // Rojo: tono 0-18° o 342-360°, más saturado que rosa
     private func isRed(h: CGFloat, s: CGFloat, v: CGFloat) -> Bool {
-        (h <= 15 || h >= 355) && s >= 0.50 && v >= 0.30
+        (h <= 18 || h >= 342) && s >= 0.45 && v >= 0.25
     }
 }
 

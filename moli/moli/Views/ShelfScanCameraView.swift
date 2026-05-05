@@ -8,6 +8,7 @@ struct ShelfScanCameraView: View {
     @State private var capturedImagePath: String?
     @State private var cameraUnavailable = false
     @State private var captureTrigger = 0
+    @State private var manosLibres = false
     
     var body: some View {
         ZStack {
@@ -49,8 +50,14 @@ struct ShelfScanCameraView: View {
                         .cornerRadius(20)
                     
                     Spacer()
-                    // Balance placeholder
-                    Image(systemName: "xmark").opacity(0).padding(10)
+                    Button(action: { manosLibres.toggle() }) {
+                        Image(systemName: manosLibres ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                            .font(.title3)
+                            .foregroundColor(manosLibres ? AppTheme.Colors.primaryBlue : .white)
+                            .padding(10)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
                 }
                 .padding()
                 
@@ -105,7 +112,7 @@ struct ShelfScanCameraView: View {
             .allowsHitTesting(false)
         }
         .navigationDestination(isPresented: $navigateToAnalysis) {
-            AIAnalysisView(store: store, imagePath: capturedImagePath)
+            AIAnalysisView(store: store, imagePath: capturedImagePath, manosLibres: manosLibres)
         }
         .toolbar(.hidden, for: .navigationBar)
     }

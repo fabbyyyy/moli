@@ -21,6 +21,9 @@ struct Store: Identifiable, Hashable {
     // For mock mapping
     let coordinatesMockX: Double
     let coordinatesMockY: Double
+
+    // Foto de la tienda (nombre del asset en xcassets, opcional)
+    var imageName: String? = nil
 }
 
 enum VisitStatus: String, Hashable {
