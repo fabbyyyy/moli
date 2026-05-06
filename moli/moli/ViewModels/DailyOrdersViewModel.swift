@@ -10,8 +10,7 @@ final class DailyOrdersViewModel {
         if !currentCart.entries.isEmpty {
             return currentCart
         }
-
-        return orders.first
+        return nil
     }
 
     var currentOrderIsPendingConfirmation: Bool {
@@ -19,11 +18,7 @@ final class DailyOrdersViewModel {
     }
 
     var historyOrders: [WeeklyOrder] {
-        if currentOrderIsPendingConfirmation {
-            return orders
-        }
-
-        return Array(orders.dropFirst())
+        return orders
     }
 
     var recentHistoryOrders: [WeeklyOrder] {
@@ -46,8 +41,20 @@ final class DailyOrdersViewModel {
         currentCart.storeCount + orders.reduce(0) { $0 + $1.storeCount }
     }
     
+    var completedStores: Int = 0
+    var totalRouteStores: Int = 0
+    
     func loadOrders() {
         self.currentCart = LocalPersistenceService.shared.weeklyOrderCart
         self.orders = LocalPersistenceService.shared.weeklyOrders
+        
+        let routeStops = LocalPersistenceService.shared.currentRoute
+        self.completedStores = routeStops.filter { $0.isCompleted }.count
+        self.totalRouteStores = routeStops.count
+    }
+    
+    func confirmOrder() {
+        LocalPersistenceService.shared.finalizeWeeklyOrderCart()
+        loadOrders()
     }
 }

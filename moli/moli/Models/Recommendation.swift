@@ -1,13 +1,13 @@
 import Foundation
 
-enum RecommendationStatus: String, Hashable {
+enum RecommendationStatus: String, Hashable, Codable {
     case pending
     case accepted
     case modified
     case rejected
 }
 
-struct Recommendation: Identifiable, Hashable {
+struct Recommendation: Identifiable, Hashable, Codable {
     let id: UUID
     let product: Product
     let suggestedQuantity: Int
