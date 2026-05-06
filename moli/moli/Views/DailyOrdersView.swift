@@ -20,7 +20,15 @@ struct DailyOrdersView: View {
 
                         if let currentOrder = viewModel.currentOrder {
                             NavigationLink {
-                                WeeklyOrderDetailView(order: currentOrder)
+                                WeeklyOrderDetailView(
+                                    order: currentOrder,
+                                    isCurrent: true,
+                                    onConfirm: {
+                                        withAnimation {
+                                            viewModel.confirmOrder()
+                                        }
+                                    }
+                                )
                             } label: {
                                 LargeBlueMetricCard(
                                     title: "TOTAL DEL PEDIDO",
@@ -151,7 +159,7 @@ private struct OrderHistorySection: View {
                 VStack(spacing: 12) {
                     ForEach(orders) { order in
                         NavigationLink {
-                            WeeklyOrderDetailView(order: order)
+                            WeeklyOrderDetailView(order: order, isCurrent: false, onConfirm: {})
                         } label: {
                             WeeklyOrderSummaryCard(order: order, isCurrent: false)
                         }
@@ -185,8 +193,8 @@ private struct WeeklyOrderSummaryCard: View {
     let isCurrent: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center) {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(isCurrent ? order.currentTitle : order.historyTitle)
                         .font(.headline)
@@ -197,32 +205,34 @@ private struct WeeklyOrderSummaryCard: View {
                         .foregroundColor(AppTheme.Colors.mutedGray)
                 }
 
-                Spacer()
+                HStack(spacing: 10) {
+                    Label("\(order.storeCount) tiendas", systemImage: "storefront.fill")
+                    Label("\(order.totalPieces) pzas", systemImage: "shippingbox.fill")
+                }
+                .font(.caption)
+                .foregroundColor(AppTheme.Colors.mutedGray)
 
-                HStack(alignment: .center, spacing: 8) {
-                    Text(order.estimatedTotalMXN.currencyText)
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-
-                    Image(systemName: "chevron.right")
-                        .font(.body.weight(.bold))
-                        .foregroundColor(AppTheme.Colors.mutedGray)
+                if let lastStoreName = order.entries.last?.store.name {
+                    Text("Última tienda: \(lastStoreName)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppTheme.Colors.primaryBlue)
                 }
             }
-
-            HStack(spacing: 10) {
-                Label("\(order.storeCount) tiendas", systemImage: "storefront.fill")
-                Label("\(order.totalPieces) pzas", systemImage: "shippingbox.fill")
-            }
-            .font(.caption)
-            .foregroundColor(AppTheme.Colors.mutedGray)
-
-            if let lastStoreName = order.entries.last?.store.name {
-                Text("Última tienda: \(lastStoreName)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppTheme.Colors.primaryBlue)
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 8) {
+                Text(order.estimatedTotalMXN.currencyText)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(AppTheme.Colors.mutedGray)
             }
         }
         .padding()
@@ -236,6 +246,11 @@ private struct WeeklyOrderSummaryCard: View {
 
 private struct WeeklyOrderDetailView: View {
     let order: WeeklyOrder
+    let isCurrent: Bool
+    let onConfirm: () -> Void
+
+    @State private var isEditing = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
@@ -243,10 +258,26 @@ private struct WeeklyOrderDetailView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    WeeklyOrderDetailHeader(order: order)
+                    WeeklyOrderDetailHeader(order: order, isCurrent: isCurrent)
 
                     ForEach(order.entries) { entry in
-                        WeeklyOrderStoreDetailCard(entry: entry)
+                        WeeklyOrderStoreDetailCard(entry: entry, isEditing: isEditing)
+                    }
+                    
+                    if isCurrent {
+                        Button(action: {
+                            onConfirm()
+                            dismiss()
+                        }) {
+                            Text("Confirmar pedido")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(AppTheme.Colors.primaryBlue)
+                                .cornerRadius(AppTheme.Radii.large)
+                        }
+                        .padding(.top, 16)
                     }
                 }
                 .padding()
@@ -254,17 +285,30 @@ private struct WeeklyOrderDetailView: View {
         }
         .navigationTitle("Detalle del pedido")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if isCurrent {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(isEditing ? "Listo" : "Editar") {
+                        withAnimation {
+                            isEditing.toggle()
+                        }
+                    }
+                    .fontWeight(.bold)
+                }
+            }
+        }
     }
 }
 
 private struct WeeklyOrderDetailHeader: View {
     let order: WeeklyOrder
+    let isCurrent: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(order.currentTitle)
+                    Text(isCurrent ? order.currentTitle : order.historyTitle)
                         .font(.title2)
                         .fontWeight(.heavy)
                         .foregroundColor(AppTheme.Colors.textPrimary)
@@ -317,6 +361,7 @@ private struct OrderDetailMetric: View {
 
 private struct WeeklyOrderStoreDetailCard: View {
     let entry: WeeklyOrderStoreEntry
+    let isEditing: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -333,13 +378,13 @@ private struct WeeklyOrderStoreDetailCard: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 2) {
+                    Text(entry.estimatedTotalMXN.currencyText)
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppTheme.Colors.primaryBlue)
                     Text("\(entry.totalPieces) pzas")
                         .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                    Text(entry.estimatedTotalMXN.currencyText)
-                        .font(.caption)
-                        .foregroundColor(AppTheme.Colors.primaryBlue)
+                        .foregroundColor(AppTheme.Colors.mutedGray)
                 }
             }
 
@@ -352,7 +397,8 @@ private struct WeeklyOrderStoreDetailCard: View {
                     ForEach(entry.recommendations) { recommendation in
                         WeeklyOrderProductRow(
                             storeName: entry.store.name,
-                            recommendation: recommendation
+                            recommendation: recommendation,
+                            isEditing: isEditing
                         )
                     }
                 }
@@ -368,9 +414,15 @@ private struct WeeklyOrderStoreDetailCard: View {
 private struct WeeklyOrderProductRow: View {
     let storeName: String
     let recommendation: Recommendation
+    let isEditing: Bool
 
-    private var quantity: Int {
-        recommendation.editableQuantity
+    @State private var quantity: Int
+
+    init(storeName: String, recommendation: Recommendation, isEditing: Bool) {
+        self.storeName = storeName
+        self.recommendation = recommendation
+        self.isEditing = isEditing
+        self._quantity = State(initialValue: recommendation.editableQuantity)
     }
 
     var body: some View {
@@ -394,15 +446,36 @@ private struct WeeklyOrderProductRow: View {
 
             Spacer(minLength: 8)
 
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("\(quantity)")
-                    .font(.headline)
-                    .fontWeight(.heavy)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+            VStack(alignment: .trailing, spacing: 6) {
                 Text((Double(quantity) * recommendation.product.unitPriceMXN).currencyText)
-                    .font(.caption)
+                    .font(.headline)
                     .fontWeight(.bold)
                     .foregroundColor(AppTheme.Colors.textPrimary)
+
+                if isEditing {
+                    HStack(spacing: 8) {
+                        Button(action: { if quantity > 0 { quantity -= 1 } }) {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(AppTheme.Colors.mutedGray)
+                        }
+                        
+                        Text("\(quantity) pzas")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .frame(minWidth: 46, alignment: .center)
+                            
+                        Button(action: { quantity += 1 }) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(AppTheme.Colors.primaryBlue)
+                        }
+                    }
+                } else {
+                    Text("\(quantity) pzas")
+                        .font(.subheadline)
+                        .foregroundColor(AppTheme.Colors.mutedGray)
+                }
             }
         }
         .padding(10)
@@ -482,7 +555,7 @@ private extension WeeklyOrder {
     }
 
     private func formattedDate(_ date: Date) -> String {
-        date.formatted(.dateTime.day().month(.abbreviated).locale(Locale(identifier: "es_MX")))
+        date.formatted(.dateTime.day().month(.abbreviated).year().locale(Locale(identifier: "es_MX")))
     }
 }
 

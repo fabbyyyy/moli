@@ -52,4 +52,9 @@ final class DailyOrdersViewModel {
         self.completedStores = routeStops.filter { $0.isCompleted }.count
         self.totalRouteStores = routeStops.count
     }
+    
+    func confirmOrder() {
+        LocalPersistenceService.shared.finalizeWeeklyOrderCart()
+        loadOrders()
+    }
 }

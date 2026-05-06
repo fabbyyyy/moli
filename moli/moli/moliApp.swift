@@ -3,12 +3,18 @@ import SwiftUI
 @main
 struct moliApp: App {
     @State private var showSplash = true
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     var body: some Scene {
         WindowGroup {
             ZStack {
-                MainTabView()
-                    .opacity(showSplash ? 0 : 1)
+                if hasSeenOnboarding {
+                    MainTabView()
+                        .opacity(showSplash ? 0 : 1)
+                } else {
+                    OnboardingView()
+                        .opacity(showSplash ? 0 : 1)
+                }
 
                 if showSplash {
                     SplashScreen()

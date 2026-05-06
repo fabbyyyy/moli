@@ -9,12 +9,27 @@ class LocalPersistenceService: ObservableObject {
     @Published var weeklyOrderCart: WeeklyOrder
     @Published var weeklyOrders: [WeeklyOrder] = []
     
+    private let weeklyOrdersKey = "saved_weekly_orders"
+    private let cartKey = "saved_weekly_cart"
+    
     private init() {
         // Initialize with mock data for MVP demo
         self.stores = MockStores.allStores
         self.currentRoute = MockRouteStops.todayRoute
-        self.weeklyOrderCart = Self.makeEmptyWeeklyCart(routeName: "Ruta 14")
-        self.weeklyOrders = MockOrders.dummyWeeklyOrders
+        
+        if let data = UserDefaults.standard.data(forKey: cartKey),
+           let savedCart = try? JSONDecoder().decode(WeeklyOrder.self, from: data) {
+            self.weeklyOrderCart = savedCart
+        } else {
+            self.weeklyOrderCart = Self.makeEmptyWeeklyCart(routeName: "Ruta 14")
+        }
+        
+        if let data = UserDefaults.standard.data(forKey: weeklyOrdersKey),
+           let savedOrders = try? JSONDecoder().decode([WeeklyOrder].self, from: data) {
+            self.weeklyOrders = savedOrders
+        } else {
+            self.weeklyOrders = MockOrders.dummyWeeklyOrders
+        }
     }
     
     func getInventory(for storeId: UUID) -> [InventoryItem] {
@@ -44,6 +59,8 @@ class LocalPersistenceService: ObservableObject {
         if let index = currentRoute.firstIndex(where: { $0.store.id == order.store.id }) {
             currentRoute[index].isCompleted = true
         }
+        
+        saveState()
     }
     
     func finalizeWeeklyOrderCart() {
@@ -55,10 +72,21 @@ class LocalPersistenceService: ObservableObject {
         weeklyOrderCart.finalizedAt = Date()
         weeklyOrders.insert(weeklyOrderCart, at: 0)
         weeklyOrderCart = Self.makeEmptyWeeklyCart(routeName: weeklyOrderCart.routeName)
+        
+        saveState()
     }
     
     func saveOrder(_ order: Order) {
         addOrderSuggestionToCart(order)
+    }
+    
+    private func saveState() {
+        if let cartData = try? JSONEncoder().encode(weeklyOrderCart) {
+            UserDefaults.standard.set(cartData, forKey: cartKey)
+        }
+        if let ordersData = try? JSONEncoder().encode(weeklyOrders) {
+            UserDefaults.standard.set(ordersData, forKey: weeklyOrdersKey)
+        }
     }
     
     private static func makeEmptyWeeklyCart(routeName: String) -> WeeklyOrder {

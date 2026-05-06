@@ -1,6 +1,6 @@
 import Foundation
 
-struct Store: Identifiable, Hashable {
+struct Store: Identifiable, Hashable, Codable {
     let id: UUID
     let name: String
     let customerNumber: String
@@ -23,7 +23,7 @@ struct Store: Identifiable, Hashable {
     let coordinatesMockY: Double
 }
 
-enum VisitStatus: String, Hashable {
+enum VisitStatus: String, Hashable, Codable {
     case pending
     case inProgress
     case completed

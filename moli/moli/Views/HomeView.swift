@@ -14,6 +14,11 @@ struct HomeView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         HomeHeader(userName: viewModel.userName)
+                        
+                        if viewModel.userName.lowercased() == "antonio" {
+                            AntonioNoticeCard()
+                        }
+                        
                         CurrentRouteCard(
                             routeName: viewModel.currentRouteName,
                             completedStores: viewModel.completedStores,
@@ -257,6 +262,34 @@ private struct ProfileEditorSheet: View {
 
     private func dismissSheet() {
         dismiss()
+    }
+}
+
+private struct AntonioNoticeCard: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "info.circle.fill")
+                .font(.title3)
+                .foregroundColor(AppTheme.Colors.primaryBlue)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Cambio temporal de ruta")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+
+                Text("Debido a la ausencia de Luis esta semana, se ha reasignado su ruta a tu perfil. Por favor atiende los pendientes indicados.")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.Colors.mutedGray)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding()
+        .background(AppTheme.Colors.softBlue.opacity(0.3))
+        .cornerRadius(AppTheme.Radii.medium)
+        .padding(.horizontal)
     }
 }
 

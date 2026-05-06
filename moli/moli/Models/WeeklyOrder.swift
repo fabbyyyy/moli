@@ -1,13 +1,13 @@
 import Foundation
 
-enum WeeklyOrderStatus: String, Hashable {
+enum WeeklyOrderStatus: String, Hashable, Codable {
     case cart
     case readyForNextWeek
     case sentSimulated
     case pendingSync
 }
 
-struct WeeklyOrderStoreEntry: Identifiable, Hashable {
+struct WeeklyOrderStoreEntry: Identifiable, Hashable, Codable {
     let id: UUID
     let store: Store
     var recommendations: [Recommendation]
@@ -16,7 +16,7 @@ struct WeeklyOrderStoreEntry: Identifiable, Hashable {
     let addedAt: Date
 }
 
-struct WeeklyOrder: Identifiable, Hashable {
+struct WeeklyOrder: Identifiable, Hashable, Codable {
     let id: UUID
     let routeName: String
     let createdAt: Date

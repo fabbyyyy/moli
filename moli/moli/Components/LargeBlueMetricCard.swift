@@ -6,22 +6,30 @@ struct LargeBlueMetricCard: View {
     let subtitle: String?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.caption)
-                .textCase(.uppercase)
-                .foregroundColor(AppTheme.Colors.softBlue)
-                .bold()
-            
-            Text(value)
-                .font(.system(size: 40, weight: .bold))
-                .foregroundColor(.white)
-            
-            if let subtitle = subtitle {
-                Text(subtitle)
-                    .font(.subheadline)
+        HStack {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.caption)
+                    .textCase(.uppercase)
                     .foregroundColor(AppTheme.Colors.softBlue)
+                    .bold()
+                
+                Text(value)
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(.white)
+                
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundColor(AppTheme.Colors.softBlue)
+                }
             }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.system(size: 32, weight: .light))
+                .foregroundColor(.white)
         }
         .padding(AppTheme.Radii.large)
         .frame(maxWidth: .infinity, alignment: .leading)

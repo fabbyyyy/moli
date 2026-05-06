@@ -19,7 +19,11 @@ struct ReadyOrderSummary: Identifiable, Hashable {
 
 @Observable
 final class HomeViewModel {
-    var userName: String = "Luis"
+    var userName: String = UserDefaults.standard.string(forKey: "userName") ?? "Luis" {
+        didSet {
+            UserDefaults.standard.set(userName, forKey: "userName")
+        }
+    }
     var currentRouteName: String = "Ruta 14"
     var completedStores: Int = 3
     var totalStores: Int = 8
