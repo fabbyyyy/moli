@@ -22,7 +22,9 @@ struct ConfirmationView: View {
 
                 Spacer()
 
-                NavigationLink(destination: MainTabView()) {
+                Button(action: {
+                    NotificationCenter.default.post(name: NSNotification.Name("PopToRouteMap"), object: nil)
+                }) {
                     HStack {
                         Image(systemName: "arrow.right")
                         Text("SIGUIENTE TIENDA")

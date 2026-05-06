@@ -112,6 +112,9 @@ struct RouteMapView: View {
             viewModel.selectSpot(id: newValue)
             centerOnSelectedSpot(id: newValue)
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRouteMap"))) { _ in
+            scanStore = nil
+        }
     }
 
     // MARK: - Bindings de Navegación

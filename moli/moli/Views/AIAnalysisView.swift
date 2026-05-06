@@ -68,6 +68,7 @@ struct AIAnalysisView: View {
                 ConfirmationView(store: viewModel.store, pieces: order.totalPieces, wasteAvoided: order.avoidedWasteMXN)
             }
         }
+        .toolbar(.hidden, for: .tabBar)
         .task { await viewModel.analyze() }
         .onChange(of: viewModel.isLoading) { _, loading in
             if !loading && manosLibres { speakAnalysis() }

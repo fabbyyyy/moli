@@ -167,7 +167,7 @@ struct MapFloatingControls: View {
             controlPill
                 .position(
                     x: geometry.size.width - trailingPadding - (pillWidth / 2),
-                    y: geometry.size.height * (isRaised ? 0.50 : 0.74)
+                    y: geometry.size.height * (isRaised ? 0.45 : 0.65)
                 )
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isRaised)
         }
