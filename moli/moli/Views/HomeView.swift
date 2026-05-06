@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 struct HomeView: View {
     @State private var viewModel = HomeViewModel()
@@ -26,7 +27,9 @@ struct HomeView: View {
                             nextStoreName: viewModel.nextStoreName,
                             onStartRoute: { selectedTab = 1 }
                         )
-                        
+
+                        RouteCoachWidget(storeName: viewModel.nextStoreName)
+
                         CoursesSection()
 
                         Spacer(minLength: 40)
@@ -268,6 +271,159 @@ private struct ProfileEditorSheet: View {
 
     private func dismissSheet() {
         dismiss()
+    }
+}
+
+// MARK: - Route Coach Widget
+private struct RouteCoachWidget: View {
+    let storeName: String
+    @State private var currentStep = 0
+    @State private var synth = AVSpeechSynthesizer()
+
+    private var steps: [CoachStep] {
+        CoachStep.generate(for: storeName)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                HStack(spacing: 6) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(AppTheme.Colors.primaryBlue)
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "sparkles")
+                            .font(.caption2).bold()
+                            .foregroundColor(.white)
+                    }
+                    Text("Recomendaciones")
+                        .font(.subheadline).bold()
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                Spacer()
+                Text(storeName)
+                    .font(.caption).bold()
+                    .foregroundColor(.white.opacity(0.6))
+            }
+            .padding(.bottom, 14)
+
+            // Step label
+            if currentStep < steps.count {
+                let step = steps[currentStep]
+
+                Text("INSTRUCCIÓN \(step.number) DE \(steps.count) · \(step.category)")
+                    .font(.caption).bold()
+                    .foregroundColor(AppTheme.Colors.alertOrange)
+                    .padding(.bottom, 6)
+
+                Text(step.instruction)
+                    .font(.body).bold()
+                    .foregroundColor(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 12)
+
+                // Waveform decorativa
+                HStack(spacing: 3) {
+                    ForEach(0..<9, id: \.self) { i in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(AppTheme.Colors.primaryBlue)
+                            .frame(width: 3, height: CGFloat([8,14,10,18,12,16,9,13,7][i]))
+                    }
+                    Text("Leyendo en voz alta")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.5))
+                        .padding(.leading, 6)
+                }
+                .padding(.bottom, 14)
+
+                // Botones
+                HStack(spacing: 10) {
+                    Button {
+                        if currentStep < steps.count - 1 { currentStep += 1; speak(steps[currentStep].instruction) }
+                    } label: {
+                        Text("Saltar")
+                            .font(.subheadline).bold()
+                            .frame(maxWidth: .infinity).frame(height: 44)
+                            .background(Color.white.opacity(0.1))
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    Button {
+                        if currentStep < steps.count - 1 {
+                            currentStep += 1
+                            speak(steps[currentStep].instruction)
+                        } else {
+                            currentStep = 0
+                            speak(steps[0].instruction)
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(currentStep < steps.count - 1 ? "Hecho" : "Reiniciar")
+                            Image(systemName: currentStep < steps.count - 1 ? "checkmark" : "arrow.counterclockwise")
+                        }
+                        .font(.subheadline).bold()
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(AppTheme.Colors.primaryBlue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                    }
+                }
+                .padding(.bottom, 12)
+
+                // Impacto
+                Text(step.impact)
+                    .font(.caption2).bold()
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Color.white.opacity(0.15))
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+            }
+        }
+        .padding()
+        .background(Color(hex: "0C1A30"))
+        .cornerRadius(AppTheme.Radii.large)
+        .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)
+        .padding(.horizontal)
+        .onAppear { speak(steps[currentStep].instruction) }
+    }
+
+    private func speak(_ text: String) {
+        synth.stopSpeaking(at: .immediate)
+        let utt = AVSpeechUtterance(string: text)
+        utt.voice = AVSpeechSynthesisVoice(language: "es-MX")
+        utt.rate = 0.48
+        synth.speak(utt)
+    }
+}
+
+private struct CoachStep {
+    let number: Int
+    let category: String
+    let instruction: String
+    let impact: String
+
+    static func generate(for storeName: String) -> [CoachStep] {
+        let orders = LocalPersistenceService.shared.weeklyOrders
+        let storeOrder = orders.first?.entries.first { $0.store.name == storeName }
+        let pieces = storeOrder?.totalPieces ?? 14
+        let mainProduct = storeOrder?.recommendations.first?.product.name ?? "Takis Morados"
+
+
+        return [
+            CoachStep(number: 1, category: "BAJAR PRODUCTO",
+                      instruction: "Baja \(pieces) piezas de \(mainProduct) del camión para \(storeName).",
+                      impact: "Merma evitada visita +$\(pieces * 19)"),
+            CoachStep(number: 2, category: "RETIRAR MERMA",
+                      instruction: "Antes de surtir, revisa el anaquel y retira los productos con sticker rojo vencidos.",
+                      impact: "Evita devoluciones"),
+            CoachStep(number: 3, category: "REPONER",
+                      instruction: "Coloca \(mainProduct) en los huecos vacíos. Pon el lote nuevo detrás del existente.",
+                      impact: "Asegura venta del día"),
+            CoachStep(number: 4, category: "CONFIRMAR",
+                      instruction: "Toma foto del anaquel surtido y confirma el pedido en la app.",
+                      impact: "Visita completada ✓")
+        ]
     }
 }
 
