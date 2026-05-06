@@ -371,14 +371,6 @@ private struct RegionInsightPage: View {
                     title: "¿Por qué se venden más aquí?",
                     content: region.reason
                 )
-
-                // KPI
-                InsightSection(
-                    icon: "gauge.with.dots.needle.33percent",
-                    iconColor: .green,
-                    title: "KPI recomendado",
-                    content: region.kpi
-                )
             }
             .padding(24)
         }
