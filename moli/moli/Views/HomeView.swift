@@ -160,17 +160,20 @@ private struct CoursesSection: View {
                 HStack(spacing: 16) {
                     CourseCard(
                         title: "Finanzas Personales",
-                        subtitle: "Aprende a administrar tu dinero",
+                        subtitle: "Tips prácticos para rendir tu quincena y ahorrar sin complicaciones.",
+                        imageName: "finanzas_personales",
                         url: "https://www.grupobimbo.com"
                     )
                     CourseCard(
                         title: "Excel Básico",
-                        subtitle: "Domina las hojas de cálculo",
+                        subtitle: "Agiliza tus reportes y ahorra tiempo con trucos súper fáciles de usar.",
+                        imageName: "excel",
                         url: "https://www.grupobimbo.com"
                     )
                     CourseCard(
                         title: "Mejorando la Familia",
-                        subtitle: "Tips para la vida diaria",
+                        subtitle: "Ideas útiles para convivir mejor en casa y apoyar a los tuyos.",
+                        imageName: "mejor_papa",
                         url: "https://www.grupobimbo.com"
                     )
                 }
@@ -184,14 +187,17 @@ private struct CoursesSection: View {
 private struct CourseCard: View {
     let title: String
     let subtitle: String
+    let imageName: String
     let url: String
 
     var body: some View {
         Link(destination: URL(string: url)!) {
             VStack(alignment: .leading, spacing: 12) {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(height: 120)
+                Image(imageName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 240, height: 120)
+                    .clipped()
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)

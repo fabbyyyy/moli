@@ -35,15 +35,11 @@ private struct WelcomePage: View {
     let onNext: () -> Void
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                AppTheme.Colors.primaryBlue.opacity(0.1)
-                Image(systemName: "box.truck.badge.clock.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(AppTheme.Colors.primaryBlue)
-            }
-            .frame(height: 300)
-            .frame(maxWidth: .infinity)
-            .edgesIgnoringSafeArea(.top)
+            Image("welcome")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: 300)
+                .edgesIgnoringSafeArea(.top)
             
             VStack(alignment: .leading, spacing: 24) {
                 Text("¡Bienvenido a Moli!")
@@ -70,6 +66,7 @@ private struct WelcomePage: View {
                 .padding(.bottom, 20)
             }
             .padding(24)
+            .padding(.top, 16)
         }
     }
 }
@@ -81,15 +78,11 @@ private struct CameraPermissionPage: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                AppTheme.Colors.primaryBlue.opacity(0.1)
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(AppTheme.Colors.primaryBlue)
-            }
-            .frame(height: 300)
-            .frame(maxWidth: .infinity)
-            .edgesIgnoringSafeArea(.top)
+            Image("camera")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: 300)
+                .edgesIgnoringSafeArea(.top)
             
             VStack(alignment: .leading, spacing: 24) {
                 Text("Permiso de Cámara")
@@ -129,6 +122,7 @@ private struct CameraPermissionPage: View {
                 }
             }
             .padding(24)
+            .padding(.top, 16)
         }
         .onChange(of: scenePhase) { old, new in
             if new == .active {
@@ -181,15 +175,11 @@ private struct LocationPermissionPage: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                AppTheme.Colors.primaryBlue.opacity(0.1)
-                Image(systemName: "location.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(AppTheme.Colors.primaryBlue)
-            }
-            .frame(height: 300)
-            .frame(maxWidth: .infinity)
-            .edgesIgnoringSafeArea(.top)
+            Image("localization")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: 300)
+                .edgesIgnoringSafeArea(.top)
             
             VStack(alignment: .leading, spacing: 24) {
                 Text("Permiso de Ubicación")
@@ -229,6 +219,7 @@ private struct LocationPermissionPage: View {
                 }
             }
             .padding(24)
+            .padding(.top, 16)
         }
         .onChange(of: scenePhase) { old, new in
             if new == .active {

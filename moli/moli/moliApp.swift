@@ -37,21 +37,12 @@ private struct SplashScreen: View {
         ZStack {
             AppTheme.Colors.primaryBlue.ignoresSafeArea()
 
-            VStack(spacing: 16) {
-                Image(systemName: "truck.box.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.white)
-                    .scaleEffect(pulse ? 1.08 : 1.0)
-                    .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
-
-                Text("Moli")
-                    .font(.system(size: 42, weight: .heavy, design: .rounded))
-                    .foregroundColor(.white)
-
-                Text("Tu copiloto de ruta")
-                    .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.7))
-            }
+            Image("moli")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 200)
+                .scaleEffect(pulse ? 1.05 : 1.0)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
         }
         .onAppear { pulse = true }
     }
