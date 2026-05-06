@@ -7,9 +7,12 @@ struct RouteMapView: View {
     @State private var activeMapControl: MapFloatingControl?
     @State private var isProgrammaticCameraMove = false
     @State private var scanStore: Store? // El trigger para la navegación
+    @State private var selectedRegion: RegionInsight?
+    @State private var regionTourIndex = 0
+    @State private var isRegionSheetPresented = false
     @State private var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 19.4326, longitude: -99.1332),
-        span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
+        center: CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528),
+        span: MKCoordinateSpan(latitudeDelta: 12.0, longitudeDelta: 12.0)
     ))
 
     var body: some View {
@@ -20,9 +23,16 @@ struct RouteMapView: View {
                 selectedSpotID: $viewModel.selectedSpotID,
                 spots: viewModel.routeSpots,
                 routeSegments: viewModel.routeSegments,
+                regionInsights: RegionInsight.all,
                 navigationUserCoordinate: nil,
                 showsNativeUserAnnotation: true,
-                cameraChangedAction: clearActiveMapControlAfterUserMove
+                cameraChangedAction: clearActiveMapControlAfterUserMove,
+                onRegionTapped: { region in
+                    if let idx = RegionInsight.all.firstIndex(where: { $0.id == region.id }) {
+                        regionTourIndex = idx
+                    }
+                    isRegionSheetPresented = true
+                }
             )
 
             // Barra de progreso superior
@@ -37,10 +47,11 @@ struct RouteMapView: View {
                 Spacer()
             }
 
-            // Controles flotantes (Centrar GPS / Ruta)
+            // Controles flotantes (Centrar GPS / Ruta / KPIs)
             MapFloatingControls(
                 locationAction: centerOnCurrentLocation,
                 routeAction: centerOnRoute,
+                insightsAction: cycleRegionInsights,
                 activeControl: activeMapControl,
                 isRaised: viewModel.selectedStop != nil || viewModel.isNavigationActive
             )
@@ -77,6 +88,22 @@ struct RouteMapView: View {
             .presentationDetents([.height(320), .medium])
             .presentationDragIndicator(.visible)
             .presentationBackgroundInteraction(.enabled(upThrough: .height(320)))
+        }
+        .sheet(isPresented: $isRegionSheetPresented) {
+            RegionInsightSheet(
+                regions: RegionInsight.all,
+                currentIndex: $regionTourIndex,
+                onRegionChanged: { region in
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        cameraPosition = .region(MKCoordinateRegion(
+                            center: region.coordinate,
+                            span: MKCoordinateSpan(latitudeDelta: 3.0, longitudeDelta: 3.0)
+                        ))
+                    }
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .task {
             await loadRoute()
@@ -188,5 +215,36 @@ struct RouteMapView: View {
     private func clearActiveMapControlAfterUserMove() {
         guard !isProgrammaticCameraMove else { return }
         activeMapControl = nil
+    }
+
+    private func cycleRegionInsights() {
+        let regions = RegionInsight.all
+        guard !regions.isEmpty else { return }
+
+        if isRegionSheetPresented {
+            // If sheet is already open, advance to next
+            regionTourIndex = (regionTourIndex + 1) % regions.count
+            let region = regions[regionTourIndex]
+            withAnimation(.easeInOut(duration: 0.5)) {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: region.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 3.0, longitudeDelta: 3.0)
+                ))
+            }
+        } else {
+            // First tap: open sheet at current index
+            regionTourIndex = 0
+            let region = regions[regionTourIndex]
+            withAnimation(.easeInOut(duration: 0.5)) {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: region.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 3.0, longitudeDelta: 3.0)
+                ))
+            }
+            Task {
+                try? await Task.sleep(for: .milliseconds(500))
+                isRegionSheetPresented = true
+            }
+        }
     }
 }

@@ -29,9 +29,11 @@ struct RouteActiveNavigationView: View {
                 selectedSpotID: .constant(nil),
                 spots: viewModel.routeSpots,
                 routeSegments: viewModel.routeSegments,
+                regionInsights: [],
                 navigationUserCoordinate: locationService.currentLocation ?? viewModel.navigationRoute?.polyline.firstRouteCoordinate,
                 showsNativeUserAnnotation: false,
-                cameraChangedAction: handleNavigationCameraChanged
+                cameraChangedAction: handleNavigationCameraChanged,
+                onRegionTapped: { _ in }
             )
 
             RouteNavigationInstructionBanner(

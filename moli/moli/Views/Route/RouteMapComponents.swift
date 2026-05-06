@@ -6,9 +6,11 @@ struct RouteMap: View {
     @Binding var selectedSpotID: UUID?
     let spots: [RouteSpot]
     let routeSegments: [MKRoute]
+    let regionInsights: [RegionInsight]
     let navigationUserCoordinate: CLLocationCoordinate2D?
     let showsNativeUserAnnotation: Bool
     let cameraChangedAction: () -> Void
+    let onRegionTapped: (RegionInsight) -> Void
 
     var body: some View {
         Map(position: $cameraPosition, selection: $selectedSpotID) {
@@ -35,6 +37,13 @@ struct RouteMap: View {
                 Annotation("", coordinate: navigationUserCoordinate) {
                     NavigationLocationPuck()
                 }
+            }
+
+            ForEach(regionInsights) { insight in
+                Annotation("", coordinate: insight.coordinate) {
+                    RegionInsightPin(region: insight, onTap: onRegionTapped)
+                }
+                .annotationTitles(.hidden)
             }
         }
         .mapStyle(.standard(elevation: .realistic))
@@ -146,6 +155,7 @@ enum MapFloatingControl {
 struct MapFloatingControls: View {
     let locationAction: () -> Void
     let routeAction: () -> Void
+    let insightsAction: () -> Void
     let activeControl: MapFloatingControl?
     let isRaised: Bool
 
@@ -169,6 +179,12 @@ struct MapFloatingControls: View {
         if #available(iOS 26, *) {
             VStack(spacing: 20) {
                 FloatingMapButton(
+                    systemImage: "chart.bar",
+                    filledSystemImage: "chart.bar.fill",
+                    isActive: false,
+                    action: insightsAction
+                )
+                FloatingMapButton(
                     systemImage: "location",
                     filledSystemImage: "location.fill",
                     isActive: activeControl == .location,
@@ -188,6 +204,12 @@ struct MapFloatingControls: View {
             .glassEffect(.regular, in: .capsule)
         } else {
             VStack(spacing: 10) {
+                FloatingMapButton(
+                    systemImage: "chart.bar",
+                    filledSystemImage: "chart.bar.fill",
+                    isActive: false,
+                    action: insightsAction
+                )
                 FloatingMapButton(
                     systemImage: "location",
                     filledSystemImage: "location.fill",
@@ -232,5 +254,164 @@ struct FloatingMapButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Region Insight Components
+
+struct RegionInsightPin: View {
+    let region: RegionInsight
+    let onTap: (RegionInsight) -> Void
+    @State private var pulse = false
+
+    var body: some View {
+        Button {
+            onTap(region)
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Colors.alertOrange.opacity(0.25))
+                    .frame(width: 52, height: 52)
+                    .scaleEffect(pulse ? 1.15 : 1.0)
+                    .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: pulse)
+
+                Circle()
+                    .fill(AppTheme.Colors.alertOrange)
+                    .frame(width: 32, height: 32)
+                    .shadow(color: AppTheme.Colors.alertOrange.opacity(0.4), radius: 6, y: 2)
+
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+        .buttonStyle(.plain)
+        .onAppear { pulse = true }
+    }
+}
+
+struct RegionInsightSheet: View {
+    let regions: [RegionInsight]
+    @Binding var currentIndex: Int
+    let onRegionChanged: (RegionInsight) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Page indicator dots
+            HStack(spacing: 6) {
+                ForEach(0..<regions.count, id: \.self) { i in
+                    Circle()
+                        .fill(i == currentIndex ? AppTheme.Colors.alertOrange : AppTheme.Colors.mutedGray.opacity(0.3))
+                        .frame(width: 8, height: 8)
+                        .animation(.easeInOut(duration: 0.2), value: currentIndex)
+                }
+            }
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+
+            TabView(selection: $currentIndex) {
+                ForEach(Array(regions.enumerated()), id: \.element.id) { index, region in
+                    RegionInsightPage(region: region)
+                        .tag(index)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .onChange(of: currentIndex) { _, newValue in
+                let clamped = max(0, min(newValue, regions.count - 1))
+                onRegionChanged(regions[clamped])
+            }
+        }
+    }
+}
+
+private struct RegionInsightPage: View {
+    let region: RegionInsight
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                HStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.Colors.alertOrange.opacity(0.15))
+                            .frame(width: 48, height: 48)
+                        Image(systemName: "chart.bar.fill")
+                            .font(.title3.weight(.bold))
+                            .foregroundColor(AppTheme.Colors.alertOrange)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(region.region)
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        Text("Insights de la región")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.Colors.mutedGray)
+                    }
+
+                    Spacer()
+                }
+
+                Divider()
+
+                // Top Products
+                InsightSection(
+                    icon: "star.fill",
+                    iconColor: AppTheme.Colors.alertOrange,
+                    title: "Productos con mayor rotación",
+                    content: region.topProducts
+                )
+
+                // Reason
+                InsightSection(
+                    icon: "lightbulb.fill",
+                    iconColor: AppTheme.Colors.primaryBlue,
+                    title: "¿Por qué se venden más aquí?",
+                    content: region.reason
+                )
+
+                // KPI
+                InsightSection(
+                    icon: "gauge.with.dots.needle.33percent",
+                    iconColor: .green,
+                    title: "KPI recomendado",
+                    content: region.kpi
+                )
+            }
+            .padding(24)
+        }
+    }
+}
+
+private struct InsightSection: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let content: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(iconColor)
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+
+            Text(content)
+                .font(.body)
+                .foregroundColor(AppTheme.Colors.mutedGray)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.Colors.cardWhite)
+        .cornerRadius(AppTheme.Radii.medium)
+        .shadow(color: AppTheme.Shadows.card.color, radius: AppTheme.Shadows.card.radius, x: 0, y: 2)
     }
 }
